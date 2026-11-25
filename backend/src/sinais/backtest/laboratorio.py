@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +16,7 @@ from sinais.backtest.metricas import calcular
 from sinais.backtest.precos import SeriePrecos
 from sinais.backtest.relatorio import LinhaRelatorio, gerar_json, gerar_markdown
 from sinais.backtest.simulador import simular
+from sinais.core.dominio import Expiracao
 from sinais.corretoras.regras import EXNOVA, ponto_equilibrio
 
 _MINUTO_MS = 60_000
@@ -29,32 +30,55 @@ ESTRATEGIAS: dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
 }
 
 
-def _meses_acima(ops: pd.DataFrame, p_eq: float) -> float:
+def meses_acima(ops: pd.DataFrame, p_eq: float, minimo: int = 30) -> float:
+    """Fração dos meses civis (UTC) com taxa acima de ``p_eq``; meses com menos de ``minimo``
+    operações decididas não contam."""
     decididas = ops[ops["resultado"].isin(["WIN", "LOSS"])]
     if decididas.empty:
         return float("nan")
-    mes = decididas["entrada_t"] // _MES_MS
-    taxas = decididas.assign(w=decididas["resultado"] == "WIN").groupby(mes)["w"].mean()
-    return float((taxas > p_eq).mean())
+    mes = pd.to_datetime(decididas["entrada_t"], unit="ms").dt.to_period("M")
+    g = (decididas["resultado"] == "WIN").groupby(mes)
+    taxas = g.mean()[g.size() >= minimo]
+    return float((taxas > p_eq).mean()) if len(taxas) else float("nan")
 
 
-def avaliar(df_1m: pd.DataFrame, ativo: str, payout: float) -> list[LinhaRelatorio]:
-    precos = SeriePrecos.de_quadro(df_1m, _MINUTO_MS)
+def avaliar(
+    df_1m: pd.DataFrame,
+    ativo: str,
+    payout: float,
+    df_1s: pd.DataFrame | None = None,
+    expiracoes: Sequence[Expiracao] | None = None,
+) -> list[LinhaRelatorio]:
+    """Com ``df_1s``, liquida com preços de 1 s e entrada sorteada na janela de compra
+    (realista); sem ele, usa 1 min (limite superior otimista para expirações curtas)."""
+    precos = (
+        SeriePrecos.de_quadro(df_1s, 1000)
+        if df_1s is not None
+        else SeriePrecos.de_quadro(df_1m, _MINUTO_MS)
+    )
+    rotulo = " (1s)" if df_1s is not None else ""
     linhas = []
-    for expiracao, regra in EXNOVA.regras.items():
+    for expiracao in expiracoes or list(EXNOVA.regras):
+        regra = EXNOVA.regras[expiracao]
         for nome, estrategia in ESTRATEGIAS.items():
-            ops = simular(estrategia(df_1m), precos, regra)
+            ops = simular(
+                estrategia(df_1m), precos, regra, entrada_aleatoria=df_1s is not None, semente=7
+            )
             m = calcular(ops, payout)
             linhas.append(
                 LinhaRelatorio(
                     ativo,
-                    f"{int(expiracao) // 60}m",
+                    f"{int(expiracao) // 60}m{rotulo}",
                     nome,
                     m,
-                    _meses_acima(ops, ponto_equilibrio(payout)),
+                    meses_acima(ops, ponto_equilibrio(payout)),
                 )
             )
     return linhas
+
+
+def _mes(am: tuple[int, int]) -> str:
+    return f"{am[0]:04d}-{am[1]:02d}"
 
 
 def _ultimos_meses(n: int) -> list[tuple[int, int]]:
@@ -63,7 +87,9 @@ def _ultimos_meses(n: int) -> list[tuple[int, int]]:
     return [((total - i) // 12, (total - i) % 12 + 1) for i in range(n)][::-1]
 
 
-async def _principal(meses: int, payout: float, saida: Path) -> None:  # pragma: no cover
+async def _principal(  # pragma: no cover
+    meses: int, payout: float, saida: Path, meses_1s: int
+) -> None:
     import httpx
 
     from sinais.backtest.historico import baixar_meses
@@ -77,10 +103,29 @@ async def _principal(meses: int, payout: float, saida: Path) -> None:  # pragma:
             todas_lacunas += lacunas
             print(f"{ativo}: {len(df)} candles de 1m, lacunas: {lacunas or 'nenhuma'}")
             linhas += avaliar(df, ativo, payout)
+            if meses_1s:
+                recentes = periodo[-meses_1s:]
+                df_1s, lac_1s = await baixar_meses(http, ativo, "1s", recentes)
+                todas_lacunas += lac_1s
+                inicio_1s = int(df_1s.index.min()) if len(df_1s) else 0
+                print(f"{ativo}: {len(df_1s)} candles de 1s ({recentes[0]} a {recentes[-1]})")
+                linhas += avaliar(
+                    df[df.index >= inicio_1s],
+                    ativo,
+                    payout,
+                    df_1s=df_1s,
+                    expiracoes=[Expiracao.M1, Expiracao.M5],
+                )
+                del df_1s
     hipoteses = {
-        "fonte": f"data.binance.vision, klines de 1m, {periodo[0]} a {periodo[-1]}",
+        "fonte": f"data.binance.vision, klines de 1m, {_mes(periodo[0])} a {_mes(periodo[-1])}"
+        + (f"; 1s nos últimos {meses_1s} meses" if meses_1s else ""),
         "payout": f"{payout} (hipotético até o cliente informar o da Exnova)",
-        "preço": "1m: entrada = abertura do minuto da decisão; vencimento = preço na fronteira",
+        "preço (linhas sem '(1s)')": "1m: entrada = abertura do minuto da decisão, sem "
+        "latência; LIMITE SUPERIOR otimista para expirações curtas",
+        "preço (linhas '(1s)')": "1s: entrada sorteada entre decisão + 2 s e o prazo de "
+        "compra; vencimento = fechamento do candle de 1 s que termina no vencimento",
+        "apertado": "diferença de preço menor que 0,01% do preço (a corretora pode divergir)",
         "latência": "2 s (checada contra o prazo de compra)",
         "cortes 5m/30m/1h": "hipóteses (1/3 da grade) até confirmar na Exnova",
         "lacunas": ", ".join(todas_lacunas) or "nenhuma",
@@ -96,5 +141,6 @@ if __name__ == "__main__":  # pragma: no cover
     p.add_argument("--meses", type=int, default=24)
     p.add_argument("--payout", type=float, default=0.85)
     p.add_argument("--saida", type=Path, default=Path("relatorio"))
+    p.add_argument("--meses-1s", type=int, default=2)
     a = p.parse_args()
-    asyncio.run(_principal(a.meses, a.payout, a.saida))
+    asyncio.run(_principal(a.meses, a.payout, a.saida, a.meses_1s))

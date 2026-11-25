@@ -6,6 +6,7 @@ import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from sinais.backtest.metricas import Metricas, benjamini_hochberg
 
@@ -47,38 +48,47 @@ def gerar_markdown(linhas: Sequence[LinhaRelatorio], hipoteses: Mapping[str, str
         "",
         "## Resultados",
         "",
-        "| Ativo | Expiração | Estratégia | Operações | Taxa | Wilson inf. | Equilíbrio "
-        "| Valor esperado | Meses acima | Aprovada |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Ativo | Expiração | Estratégia | Decididas | Empates | Sem dado | Fora da janela "
+        "| Apertados | Taxa | Taxa s/ apertados | Wilson inf. | Equilíbrio | Valor esperado "
+        "| Meses acima | Aprovada |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for x, ok in zip(linhas, aprov, strict=True):
         m = x.metricas
         ve = "—" if math.isnan(m.valor_esperado) else f"{m.valor_esperado:+.4f}"
         partes.append(
-            f"| {x.ativo} | {x.expiracao} | {x.estrategia} | {m.n} | {_pct(m.taxa)} "
-            f"| {_pct(m.wilson_inf)} | {_pct(m.p_equilibrio)} | {ve} "
+            f"| {x.ativo} | {x.expiracao} | {x.estrategia} | {m.wins + m.losses} | {m.ties} "
+            f"| {m.sem_dado} | {m.fora_janela} | {m.apertados} | {_pct(m.taxa)} "
+            f"| {_pct(m.taxa_sem_apertados)} | {_pct(m.wilson_inf)} "
+            f"| {_pct(m.p_equilibrio)} | {ve} "
             f"| {_pct(x.meses_acima)} | {'sim' if ok else 'não'} |"
         )
     partes += [
         "",
         f"Aprovação: Benjamini-Hochberg (q = 5%) sobre todas as linhas, pelo menos {N_MINIMO} "
         f"operações decididas, limite inferior de Wilson acima do equilíbrio + "
-        f"{100 * MARGEM:.0f} p.p. e pelo menos 70% dos meses acima do equilíbrio.",
+        f"{100 * MARGEM:.0f} p.p. e pelo menos 70% dos meses civis (com 30+ operações) acima "
+        "do equilíbrio. Linhas de estratégias complementares são correlacionadas; a exigência "
+        "extra de Wilson torna a correção conservadora.",
         "",
     ]
     return "\n".join(partes)
 
 
+def _sem_nan(v: Any) -> Any:
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    if isinstance(v, dict):
+        return {k: _sem_nan(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_sem_nan(x) for x in v]
+    return v
+
+
 def gerar_json(linhas: Sequence[LinhaRelatorio], hipoteses: Mapping[str, str]) -> str:
     aprov = aprovacoes(linhas)
-    return json.dumps(
-        {
-            "hipoteses": dict(hipoteses),
-            "resultados": [
-                {**asdict(x), "aprovada": ok} for x, ok in zip(linhas, aprov, strict=True)
-            ],
-        },
-        ensure_ascii=False,
-        indent=2,
-        default=lambda v: None if isinstance(v, float) and math.isnan(v) else v,
-    )
+    dados = {
+        "hipoteses": dict(hipoteses),
+        "resultados": [{**asdict(x), "aprovada": ok} for x, ok in zip(linhas, aprov, strict=True)],
+    }
+    return json.dumps(_sem_nan(dados), ensure_ascii=False, indent=2, allow_nan=False)

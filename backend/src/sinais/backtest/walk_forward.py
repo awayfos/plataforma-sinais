@@ -33,8 +33,11 @@ def dobras(
     treino_meses: int = 6,
     calibracao_meses: int = 1,
     teste_meses: int = 1,
+    holdout_meses: int = 3,
 ) -> list[Dobra]:
-    """Dobras dentro de ``[inicio, fim)``. ``inicio`` é levado ao primeiro dia do mês."""
+    """Dobras dentro de ``[inicio, fim)``, deixando os últimos ``holdout_meses`` intocados
+    para a avaliação final (design §13.2). ``inicio`` é levado ao primeiro dia do mês."""
+    fim = _somar_meses(fim, -holdout_meses) if holdout_meses else fim
     base = _somar_meses(inicio, 0)
     if base < inicio:
         base = _somar_meses(base, 1)
@@ -49,6 +52,7 @@ def dobras(
         base = _somar_meses(base, teste_meses)
 
 
-def purgar(decisoes: pd.Series, horizonte_ms: int, ate: InstanteMs, embargo_ms: int) -> pd.Series:
-    """True para amostras cujo rótulo (decisão + horizonte) termina antes de ``ate - embargo``."""
-    return (decisoes + horizonte_ms) <= (ate - embargo_ms)
+def purgar(fim_rotulo: pd.Series, ate: InstanteMs, embargo_ms: int) -> pd.Series:
+    """True para amostras cujo rótulo termina até ``ate - embargo``. Use o vencimento real de
+    cada sinal (com vencimento no relógio ele varia até ``2 x grade - corte`` após a decisão)."""
+    return fim_rotulo <= (ate - embargo_ms)

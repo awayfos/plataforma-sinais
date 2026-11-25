@@ -58,3 +58,11 @@ def test_pvalor_binomial_exato() -> None:
     # P(X >= 9 | n=10, p=.5) = (10 + 1) / 1024
     assert pvalor_acima_equilibrio(9, 10, 0.5) == pytest.approx(11 / 1024)
     assert math.isnan(pvalor_acima_equilibrio(0, 0, 0.5))
+
+
+def test_calcular_conta_apertados() -> None:
+    df = ops("WIN", "WIN", "LOSS")
+    df["apertado"] = [True, False, False]
+    m = calcular(df, payout=0.85)
+    assert m.apertados == 1
+    assert m.taxa_sem_apertados == 0.5

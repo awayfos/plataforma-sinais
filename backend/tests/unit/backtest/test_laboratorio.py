@@ -65,3 +65,30 @@ def test_avaliar_e_relatorio_com_hipoteses() -> None:
     assert "0.85 (hipotético)" in texto
     assert "| SINTETICO |" in texto
     assert not np.isnan(linhas[0].metricas.p_equilibrio)
+
+
+def test_relatorio_mostra_empates_e_json_valido() -> None:
+    import json
+
+    from sinais.backtest.relatorio import gerar_json
+
+    linhas = avaliar(passeio(600, semente=4), "SINTETICO", payout=0.85)
+    texto = gerar_markdown(linhas, {"fonte": "sintético"})
+    assert "Empates" in texto and "Sem dado" in texto and "Apertados" in texto
+    json.loads(gerar_json(linhas, {"fonte": "sintético"}), parse_constant=lambda c: 1 / 0)
+
+
+def test_meses_acima_por_mes_civil() -> None:
+    import pandas as pd
+
+    from sinais.backtest.laboratorio import meses_acima
+
+    jan, fev = 1735689600000, 1738368000000  # 2025-01-01 e 2025-02-01 UTC
+    ops = pd.DataFrame(
+        {
+            "entrada_t": [jan + i * 60_000 for i in range(40)]
+            + [fev + i * 60_000 for i in range(40)],
+            "resultado": ["WIN"] * 40 + ["LOSS"] * 40,
+        }
+    )
+    assert meses_acima(ops, 0.54, minimo=30) == 0.5
