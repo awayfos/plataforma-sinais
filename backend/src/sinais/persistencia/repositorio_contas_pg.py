@@ -405,7 +405,7 @@ class RepositorioContasPg:
                 r.evento,
                 r.ip,
                 r.user_agent,
-                de_datetime(r.t),
+                de_datetime(r._mapping["t"]),
             )
             for r in linhas
         ]
@@ -433,7 +433,13 @@ class RepositorioContasPg:
             linhas = (await conn.execute(stmt)).all()
         return [
             RegistroAuditoria(
-                int(r.id), int(r.admin_id), r.acao, r.alvo, r.antes, r.depois, de_datetime(r.t)
+                int(r.id),
+                int(r.admin_id),
+                r.acao,
+                r.alvo,
+                r.antes,
+                r.depois,
+                de_datetime(r._mapping["t"]),
             )
             for r in linhas
         ]
