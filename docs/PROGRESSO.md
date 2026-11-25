@@ -4,7 +4,8 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 
 ## Estado atual
 
-- **Fase atual:** 4 — Motores de análise (concluída), próxima: 5 — Backtesting e validação
+- **Fase atual:** 5 — Backtesting (concluída), próxima: 6 — Modelos e calibração (relatório de decisão)
+- **Primeiro resultado real:** estratégias simples ~50% de acerto contra 54,05% de equilíbrio (payout 0,85 hipotético) → valor esperado ≈ −7% por operação (`docs/laboratorio/2026-11-25-baselines.md`)
 - **Status:** Fase 3 com CI verde, incluindo coleta real da Binance e conferência com os klines oficiais
 - **Repositório:** https://github.com/awayfos/plataforma-sinais (privado)
 - **Modo de trabalho:** o cliente pediu em 2026-11-25 para seguir sem pausa de aprovação entre fases. Os portões de decisão (Fase 6, jurídico, lançamento) continuam com ele.
@@ -17,7 +18,7 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 | 2 | Estrutura inicial | Concluída (`docs/fases/fase-02.md`) | 2026-11-25 |
 | 3 | Dados de mercado | Concluída (`docs/fases/fase-03.md`) | 2026-11-25 |
 | 4 | Motores de análise | Concluída (`docs/fases/fase-04.md`) | 2026-11-25 |
-| 5 | Backtesting e validação | Não iniciada | — |
+| 5 | Backtesting e validação | Concluída (`docs/fases/fase-05.md`) | 2026-11-25 |
 | 6 | Modelos e calibração (relatório de decisão) | Não iniciada | — |
 | 7 | Motor de sinais ao vivo (início do teste de 60 a 90 dias) | Não iniciada | — |
 | 8 | Contas e autenticação | Não iniciada | — |
