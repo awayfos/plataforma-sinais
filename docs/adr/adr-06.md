@@ -1,4 +1,4 @@
-# ADR-06: SQLAlchemy 2 + Alembic para persistência e migrações
+# ADR-06: SQLAlchemy 2 e Alembic
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

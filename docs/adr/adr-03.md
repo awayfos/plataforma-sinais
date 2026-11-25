@@ -1,4 +1,4 @@
-# ADR-03: FastAPI (série 0
+# ADR-03: FastAPI, Pydantic v2 e Uvicorn
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

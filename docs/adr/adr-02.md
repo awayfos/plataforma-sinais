@@ -1,4 +1,4 @@
-# ADR-02: Python 3
+# ADR-02: Python 3.13 gerenciado com uv
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

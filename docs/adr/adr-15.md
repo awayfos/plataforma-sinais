@@ -1,4 +1,4 @@
-# ADR-15: Docker + Docker Compose em desenvolvimento e na primeira produção (um
+# ADR-15: Docker e Docker Compose
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

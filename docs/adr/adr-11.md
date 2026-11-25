@@ -1,4 +1,4 @@
-# ADR-11: Next
+# ADR-11: Next.js 16, React 19, TypeScript, Tailwind e Lightweight Charts 5
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

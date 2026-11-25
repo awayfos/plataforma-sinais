@@ -10,7 +10,10 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
+from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError, field_validator
+
+_ESQUEMAS_DB = ("postgresql://", "postgresql+", "postgres://")
+_ESQUEMAS_REDIS = ("redis://", "rediss://")
 
 
 class Ambiente(StrEnum):
@@ -29,12 +32,28 @@ class Configuracao(BaseModel):
     binance_ws_url: str = "wss://data-stream.binance.vision"
     binance_rest_url: str = "https://api.binance.com"
 
+    @field_validator("database_url")
+    @classmethod
+    def _validar_db(cls, v: SecretStr) -> SecretStr:
+        if not v.get_secret_value().startswith(_ESQUEMAS_DB):
+            raise ValueError("esquema de banco inválido")
+        return v
+
+    @field_validator("redis_url")
+    @classmethod
+    def _validar_redis(cls, v: SecretStr) -> SecretStr:
+        if not v.get_secret_value().startswith(_ESQUEMAS_REDIS):
+            raise ValueError("esquema de redis inválido")
+        return v
+
 
 class ErroConfiguracao(Exception):
     """Configuração ausente ou inválida."""
 
 
-_VARIAVEIS: dict[str, str] = {campo: f"SINAIS_{campo.upper()}" for campo in Configuracao.model_fields}
+_VARIAVEIS: dict[str, str] = {
+    campo: f"SINAIS_{campo.upper()}" for campo in Configuracao.model_fields
+}
 
 
 def carregar_configuracao(env: Mapping[str, str] | None = None) -> Configuracao:

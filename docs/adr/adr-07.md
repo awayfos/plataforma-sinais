@@ -1,4 +1,4 @@
-# ADR-07: pandas/NumPy para dados
+# ADR-07: pandas/NumPy e indicadores próprios
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

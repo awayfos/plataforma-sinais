@@ -1,4 +1,4 @@
-# ADR-12: Sessões no servidor (cookie httpOnly, Secure, SameSite=Lax, id opaco n
+# ADR-12: Sessões no servidor, Argon2id e 2FA para admin
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

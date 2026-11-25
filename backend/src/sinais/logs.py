@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import sys
 import traceback
 from typing import Any, TextIO
@@ -33,7 +34,18 @@ class FormatadorJson(logging.Formatter):
                 obj[chave if chave not in obj else f"extra_{chave}"] = valor
         if record.exc_info:
             obj["excecao"] = "".join(traceback.format_exception(*record.exc_info))
-        return json.dumps(obj, ensure_ascii=False, default=str)
+        return json.dumps(_finitos(obj), ensure_ascii=False, default=str, allow_nan=False)
+
+
+def _finitos(valor: Any) -> Any:
+    """Troca NaN e infinito por ``null``: o JSON estrito não os aceita."""
+    if isinstance(valor, float) and not math.isfinite(valor):
+        return None
+    if isinstance(valor, dict):
+        return {k: _finitos(v) for k, v in valor.items()}
+    if isinstance(valor, list | tuple):
+        return [_finitos(v) for v in valor]
+    return valor
 
 
 def configurar_logs(nivel: str = "INFO", fluxo: TextIO | None = None) -> None:

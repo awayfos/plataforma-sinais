@@ -63,3 +63,12 @@ def test_campos_nao_sobrescrevem_chaves_base(saida: io.StringIO) -> None:
     obter_logger("teste").info("evento.real", extra={"campos": {"evento": "falso"}})
     obj = json.loads(linhas(saida)[0])
     assert obj["evento"] == "evento.real"
+
+
+def test_valores_nao_finitos_geram_json_estrito(saida: io.StringIO) -> None:
+    nan, inf = float("nan"), float("inf")
+    obter_logger("teste").info("indicador", extra={"campos": {"rsi": nan, "x": inf, "y": [-inf]}})
+    obj = json.loads(linhas(saida)[0], parse_constant=lambda c: pytest.fail(f"token {c}"))
+    assert obj["rsi"] is None
+    assert obj["x"] is None
+    assert obj["y"] == [None]

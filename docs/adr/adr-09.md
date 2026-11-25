@@ -1,4 +1,4 @@
-# ADR-09: Registro de modelos próprio (tabela `model_versions` + artefatos em vo
+# ADR-09: Registro de modelos próprio
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

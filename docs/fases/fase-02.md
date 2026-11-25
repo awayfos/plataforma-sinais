@@ -25,14 +25,14 @@ Criar a base do projeto: o monorepo, o núcleo de domínio sem I/O (`sinais.core
 
 ```
 $ cd backend && python3 -m pytest -q
-53 passed in 0.12s
+63 passed in 0.14s
 $ python3 -m mypy        # strict
 Success: no issues found in 16 source files
 $ docker compose -f infra/docker-compose.yml --env-file .env.example config -q
 (exit 0)
 ```
 
-Cobertura de linhas medida com o módulo `trace` da stdlib (o `pytest-cov` não pôde ser instalado): `sinais.core` e `sinais.logs` com 100%.
+Após a revisão final: +10 testes (URLs vazias ou malformadas, NaN nos logs). Cobertura de linhas medida com o módulo `trace` da stdlib (o `pytest-cov` não pôde ser instalado): `sinais.core` e `sinais.logs` com 100%.
 
 ## 4. Auditoria: o que foi verificado e o que não foi
 

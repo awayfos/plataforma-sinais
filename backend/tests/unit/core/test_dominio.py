@@ -27,9 +27,8 @@ def test_duracoes() -> None:
 
 
 def test_tempos_graficos_da_plataforma() -> None:
-    assert [t.value for t in TempoGrafico] == [
-        "1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w",
-    ]
+    esperado = ["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+    assert [t.value for t in TempoGrafico] == esperado
 
 
 def test_abertura_na_fronteira_exata() -> None:

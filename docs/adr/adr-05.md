@@ -1,4 +1,4 @@
-# ADR-05: Redis para Redis Streams (eventos entre processos, com grupos de consu
+# ADR-05: Redis para eventos, cache e fan-out
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

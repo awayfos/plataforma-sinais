@@ -58,3 +58,32 @@ def test_le_os_environ_por_padrao(monkeypatch: pytest.MonkeyPatch) -> None:
     for k, v in BASE.items():
         monkeypatch.setenv(k, v)
     assert carregar_configuracao().ambiente is Ambiente.DESENVOLVIMENTO
+
+
+@pytest.mark.parametrize(
+    ("var", "valor"),
+    [
+        ("SINAIS_DATABASE_URL", ""),
+        ("SINAIS_DATABASE_URL", "nada"),
+        ("SINAIS_DATABASE_URL", "mysql://u:p@db/x"),
+        ("SINAIS_REDIS_URL", ""),
+        ("SINAIS_REDIS_URL", "nada"),
+    ],
+)
+def test_url_vazia_ou_malformada_rejeita(var: str, valor: str) -> None:
+    with pytest.raises(ErroConfiguracao) as exc:
+        carregar_configuracao({**BASE, var: valor})
+    assert var in str(exc.value)
+    if valor:
+        assert valor not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "url", ["postgresql://u:p@db/x", "postgresql+asyncpg://u:p@db/x", "postgres://u:p@db/x"]
+)
+def test_esquemas_postgres_aceitos(url: str) -> None:
+    assert carregar_configuracao({**BASE, "SINAIS_DATABASE_URL": url})
+
+
+def test_esquema_rediss_aceito() -> None:
+    assert carregar_configuracao({**BASE, "SINAIS_REDIS_URL": "rediss://r:6380/0"})

@@ -1,4 +1,4 @@
-# ADR-10: Explicação dos sinais por templates determinísticos na V1, a partir do
+# ADR-10: Explicações por templates determinísticos na V1
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

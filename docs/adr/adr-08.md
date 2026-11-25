@@ -1,4 +1,4 @@
-# ADR-08: LightGBM como primeiro modelo, com calibração isotônica ou de Platt em
+# ADR-08: LightGBM com calibração como primeiro modelo
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2

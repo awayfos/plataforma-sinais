@@ -1,4 +1,4 @@
-# ADR-01: Monólito modular em Python com vários processos (coletores, análise, s
+# ADR-01: Monólito modular em Python com vários processos
 
 - **Status:** aceita (design aprovado em 2026-11-25)
 - **Fonte:** design §7.2
