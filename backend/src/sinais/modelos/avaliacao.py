@@ -40,6 +40,7 @@ class ResultadoCombinacao:
     baselines: dict[str, pd.DataFrame]
     ece_medio: float
     dobras: int
+    meses_testados: int = 0
     avisos: list[str] = field(default_factory=list)
 
 
@@ -108,6 +109,8 @@ def avaliar_combinacao(
     embargo_ms: int = 60 * _MINUTO_MS,
     margem: float = 0.01,
 ) -> ResultadoCombinacao:
+    if not snapshot.index.equals(df_1m.index):
+        raise ValueError("snapshot e candles precisam do mesmo índice (alinhamento por posição)")
     regra = perfil.regras[expiracao]
     precos = SeriePrecos.de_quadro(df_1m, _MINUTO_MS)
     rot = rotular(df_1m, regra, precos)
@@ -141,9 +144,18 @@ def avaliar_combinacao(
             continue
         partes.append(ops)
         erros.append(erro)
-        janela = df_1m[(df_1m.index >= d.teste[0] - _MINUTO_MS) & (df_1m.index < d.teste[1])]
+        janela = df_1m[
+            (df_1m.index >= d.teste[0] - _MINUTO_MS) & (df_1m.index < d.teste[1] - _MINUTO_MS)
+        ]
+        # aleatória com a mesma frequência de sinais do modelo (design §13.3)
+        freq = min(1.0, len(ops) / max(1, len(janela)))
         for nome, estrategia in BASELINES.items():
-            base[nome].append(simular(estrategia(janela), precos, regra))
+            sinais_base = (
+                bl.aleatoria(janela, semente=42, prob=freq)
+                if nome == "aleatoria"
+                else estrategia(janela)
+            )
+            base[nome].append(simular(sinais_base, precos, regra))
     holdout = pd.DataFrame(columns=["resultado", "entrada_t"])
     if holdout_meses:
         h_ini = _somar_meses(fim, -holdout_meses)
@@ -176,5 +188,6 @@ def avaliar_combinacao(
         baselines={k: pd.concat(v, ignore_index=True) if v else vazio for k, v in base.items()},
         ece_medio=float(np.mean(erros)) if erros else float("nan"),
         dobras=len(partes),
+        meses_testados=len(ds),
         avisos=avisos,
     )

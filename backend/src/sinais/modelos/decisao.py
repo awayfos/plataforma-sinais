@@ -12,14 +12,31 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from sinais.backtest.laboratorio import meses_acima
+import pandas as pd
+
 from sinais.backtest.metricas import Metricas, benjamini_hochberg, calcular
 from sinais.core.dominio import Expiracao
 from sinais.corretoras.regras import ponto_equilibrio
 from sinais.modelos.avaliacao import ResultadoCombinacao
 
 N_MINIMO = 300
+N_MINIMO_HOLDOUT = 100
 MARGEM = 0.01
+MINIMO_MES = 30
+
+
+def meses_acima_estrito(ops: pd.DataFrame, p_eq: float, meses_testados: int) -> float:
+    """Fração de TODOS os meses testados com 30+ operações e taxa acima de ``p_eq``.
+    Mês sem operações (ou pulado) conta como abaixo: impede concentrar o resultado."""
+    if meses_testados <= 0:
+        return math.nan
+    decididas = ops[ops["resultado"].isin(["WIN", "LOSS"])]
+    if decididas.empty:
+        return 0.0
+    mes = pd.to_datetime(decididas["entrada_t"], unit="ms").dt.to_period("M")
+    g = (decididas["resultado"] == "WIN").groupby(mes)
+    acima = ((g.mean() > p_eq) & (g.size() >= MINIMO_MES)).sum()
+    return float(acima) / meses_testados
 
 
 @dataclass(frozen=True)
@@ -50,7 +67,7 @@ def consolidar(
         h = calcular(r.holdout, payout)
         bases = [calcular(o, payout).taxa for o in r.baselines.values()]
         melhor = max((b for b in bases if not math.isnan(b)), default=math.nan)
-        meses = meses_acima(r.operacoes, p_eq) if len(r.operacoes) else math.nan
+        meses = meses_acima_estrito(r.operacoes, p_eq, r.meses_testados)
         motivos = []
         if m.wins + m.losses < N_MINIMO:
             motivos.append(f"só {m.wins + m.losses} operações decididas (mínimo {N_MINIMO})")
@@ -59,11 +76,14 @@ def consolidar(
         if not (m.taxa > melhor):
             motivos.append("não supera as estratégias simples")
         if not (meses >= 0.7):
-            motivos.append("menos de 70% dos meses acima do equilíbrio")
+            motivos.append("menos de 70% dos meses testados acima do equilíbrio")
         if not passou_bh:
             motivos.append("não sobrevive à correção de Benjamini-Hochberg")
-        if not (h.taxa > p_eq):
-            motivos.append("holdout abaixo do equilíbrio")
+        if h.wins + h.losses < N_MINIMO_HOLDOUT or not (h.wilson_inf > p_eq):
+            motivos.append(
+                f"holdout sem confirmação (mínimo {N_MINIMO_HOLDOUT} operações e Wilson "
+                "inferior acima do equilíbrio)"
+            )
         linhas.append(
             LinhaDecisao(
                 ativo,

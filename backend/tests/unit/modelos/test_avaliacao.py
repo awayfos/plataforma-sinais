@@ -60,3 +60,14 @@ def test_ponta_a_ponta_sem_vantagem_nao_passa() -> None:
     # sem vantagem real: o limite inferior de Wilson não pode passar do equilíbrio
     assert np.isnan(m.wilson_inf) or m.wilson_inf < m.p_equilibrio
     assert r.ece_medio < 0.05
+
+
+def test_snapshot_desalinhado_recusa() -> None:
+    import pytest
+
+    inicio = de_datetime(datetime(2025, 1, 1, tzinfo=UTC))
+    idx = pd.Index(inicio + np.arange(100) * M, name="abertura")
+    df = pd.DataFrame({"o": 1.0, "h": 1.0, "l": 1.0, "c": 1.0, "v": 1.0, "vb": 0.5}, index=idx)
+    snap = pd.DataFrame({"a": np.zeros(100)}, index=idx + M)
+    with pytest.raises(ValueError):
+        avaliar_combinacao(df, snap, Expiracao.M1, payout=0.85)

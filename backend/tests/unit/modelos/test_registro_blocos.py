@@ -22,17 +22,33 @@ def test_blocos_reproduzem_o_snapshot_inteiro() -> None:
 
 def test_registro_promove_so_se_aprovado_e_melhor(tmp_path: Path) -> None:
     r = Registro(tmp_path)
-    r.salvar("BTCUSDT", "15m", "v1", {"modelo": 1}, {"aprovada": True, "taxa": 0.56})
+    r.salvar("BTCUSDT", "15m", "v1", {"modelo": 1}, _m(True, 560, 440))
     r.promover("BTCUSDT", "15m", "v1")
     assert (r.campeao("BTCUSDT", "15m") or {})["versao"] == "v1"
-    r.salvar("BTCUSDT", "15m", "v2", {"modelo": 2}, {"aprovada": True, "taxa": 0.55})
+    r.salvar("BTCUSDT", "15m", "v2", {"modelo": 2}, _m(True, 570, 430))  # não significativo
     with pytest.raises(ErroPromocao):
         r.promover("BTCUSDT", "15m", "v2")
-    r.salvar("BTCUSDT", "15m", "v3", {"modelo": 3}, {"aprovada": False, "taxa": 0.60})
+    r.salvar("BTCUSDT", "15m", "v3", {"modelo": 3}, _m(False, 600, 400))
     with pytest.raises(ErroPromocao):
         r.promover("BTCUSDT", "15m", "v3")
     assert (r.campeao("BTCUSDT", "15m") or {})["versao"] == "v1"
     assert r.carregar("BTCUSDT", "15m", "v1") == {"modelo": 1}
+    r.salvar("BTCUSDT", "15m", "v4", {"modelo": 4}, _m(True, 0, 0))
+    with pytest.raises(ErroPromocao):
+        r.promover("BTCUSDT", "15m", "v4")
+    r.salvar("BTCUSDT", "15m", "v5", {"modelo": 5}, _m(True, 620, 380))
+    r.promover("BTCUSDT", "15m", "v5")
+    assert (r.campeao("BTCUSDT", "15m") or {})["versao"] == "v5"
+
+
+def _m(aprovada: bool, wins: int, losses: int) -> dict[str, object]:
+    n = wins + losses
+    return {
+        "aprovada": aprovada,
+        "wins": wins,
+        "losses": losses,
+        "taxa": wins / n if n else float("nan"),
+    }
 
 
 def test_sem_campeao_none(tmp_path: Path) -> None:
