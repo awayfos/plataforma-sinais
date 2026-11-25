@@ -69,4 +69,3 @@ class RelogioFixo:
 
     def definir(self, ms: InstanteMs) -> None:
         self._agora = validar_instante(ms)
-

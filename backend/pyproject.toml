@@ -41,6 +41,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "N"]
+# N818 exige o sufixo inglês "Error"; o projeto usa nomes em português com o prefixo "Erro".
+ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
