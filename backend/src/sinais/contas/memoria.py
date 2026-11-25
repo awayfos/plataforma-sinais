@@ -1,0 +1,209 @@
+"""Repositório de contas em memória: dublê de testes com o mesmo contrato do PostgreSQL."""
+
+from __future__ import annotations
+
+import copy
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
+from typing import Any
+
+from sinais.contas.modelos import (
+    Assinatura,
+    ItemPayout,
+    Modo,
+    NovoPlano,
+    NovoUsuario,
+    Plano,
+    RegistroAcesso,
+    RegistroAuditoria,
+    Sessao,
+    StatusUsuario,
+    Usuario,
+)
+from sinais.contas.repositorio import ErroEmailDuplicado
+from sinais.core.tempo import InstanteMs
+
+_ORDEM_EXPIRACAO = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "60m": 60}
+
+
+@dataclass(frozen=True, slots=True)
+class _Payout:
+    corretora: str
+    item: ItemPayout
+    valido_de: InstanteMs
+    valido_ate: InstanteMs | None
+
+
+def chave_payout(item: ItemPayout) -> tuple[str, int, str]:
+    return (item.simbolo, _ORDEM_EXPIRACAO.get(item.expiracao, 10**6), item.expiracao)
+
+
+class RepositorioContasMemoria:
+    def __init__(self) -> None:
+        self._usuarios: dict[int, Usuario] = {}
+        self._sessoes: dict[str, Sessao] = {}
+        self._planos: dict[int, Plano] = {}
+        self._assinaturas: list[Assinatura] = []
+        self._acessos: list[RegistroAcesso] = []
+        self._auditoria: list[RegistroAuditoria] = []
+        self._payouts: list[_Payout] = []
+        self._seq = 0
+
+    def _id(self) -> int:
+        self._seq += 1
+        return self._seq
+
+    async def criar_usuario(self, novo: NovoUsuario) -> Usuario:
+        if any(u.email == novo.email for u in self._usuarios.values()):
+            raise ErroEmailDuplicado(novo.email)
+        u = Usuario(
+            id=self._id(),
+            email=novo.email,
+            nome=novo.nome,
+            papel=novo.papel,
+            status=StatusUsuario.ATIVO,
+            senha_hash=novo.senha_hash,
+            totp_cifrado=novo.totp_cifrado,
+            totp_ultimo_passo=None,
+            modo=Modo.ESSENCIAL,
+            layout={},
+            criado_em=novo.criado_em,
+        )
+        self._usuarios[u.id] = u
+        return u
+
+    async def usuario_por_id(self, usuario_id: int) -> Usuario | None:
+        return self._usuarios.get(usuario_id)
+
+    async def usuario_por_email(self, email: str) -> Usuario | None:
+        return next((u for u in self._usuarios.values() if u.email == email), None)
+
+    async def listar_usuarios(
+        self, busca: str | None, status: StatusUsuario | None
+    ) -> list[Usuario]:
+        termo = busca.lower() if busca else None
+        return [
+            u
+            for _, u in sorted(self._usuarios.items())
+            if (status is None or u.status is status)
+            and (termo is None or termo in u.email.lower() or termo in u.nome.lower())
+        ]
+
+    async def salvar_usuario(self, usuario: Usuario) -> None:
+        self._usuarios[usuario.id] = replace(usuario, layout=copy.deepcopy(usuario.layout))
+
+    async def criar_sessao(self, sessao: Sessao) -> None:
+        self._sessoes[sessao.token_hash] = sessao
+
+    async def sessao(self, token_hash: str) -> Sessao | None:
+        return self._sessoes.get(token_hash)
+
+    async def salvar_sessao(self, sessao: Sessao) -> None:
+        self._sessoes[sessao.token_hash] = sessao
+
+    async def sessoes_ativas(self, usuario_id: int, agora: InstanteMs) -> list[Sessao]:
+        ativas = [
+            s
+            for s in self._sessoes.values()
+            if s.usuario_id == usuario_id and s.revogada_em is None and s.expira_em > agora
+        ]
+        return sorted(ativas, key=lambda s: (s.criada_em, s.token_hash))
+
+    async def revogar_sessoes(
+        self, usuario_id: int, agora: InstanteMs, motivo: str, exceto: str | None = None
+    ) -> int:
+        n = 0
+        for h, s in list(self._sessoes.items()):
+            if s.usuario_id == usuario_id and s.revogada_em is None and h != exceto:
+                self._sessoes[h] = replace(s, revogada_em=agora, motivo_revogacao=motivo)
+                n += 1
+        return n
+
+    async def criar_plano(self, novo: NovoPlano) -> Plano:
+        p = Plano(
+            self._id(),
+            novo.nome,
+            novo.duracao_dias,
+            novo.preco_centavos,
+            novo.recursos,
+            novo.ativo,
+        )
+        self._planos[p.id] = p
+        return p
+
+    async def plano(self, plano_id: int) -> Plano | None:
+        return self._planos.get(plano_id)
+
+    async def plano_por_nome(self, nome: str) -> Plano | None:
+        return next((p for p in self._planos.values() if p.nome == nome), None)
+
+    async def listar_planos(self) -> list[Plano]:
+        return [p for _, p in sorted(self._planos.items())]
+
+    async def salvar_plano(self, plano: Plano) -> None:
+        self._planos[plano.id] = plano
+
+    async def criar_assinatura(
+        self,
+        usuario_id: int,
+        plano_id: int,
+        inicio: InstanteMs,
+        fim: InstanteMs,
+        origem: str,
+        agora: InstanteMs,
+    ) -> Assinatura:
+        a = Assinatura(self._id(), usuario_id, plano_id, inicio, fim, origem, agora)
+        self._assinaturas.append(a)
+        return a
+
+    async def assinatura_atual(self, usuario_id: int, agora: InstanteMs) -> Assinatura | None:
+        candidatas = [
+            a for a in self._assinaturas if a.usuario_id == usuario_id and a.inicio <= agora
+        ]
+        return max(candidatas, key=lambda a: (a.fim, a.id), default=None)
+
+    async def registrar_acesso(
+        self, usuario_id: int | None, evento: str, ip: str, user_agent: str, t: InstanteMs
+    ) -> None:
+        self._acessos.append(RegistroAcesso(self._id(), usuario_id, evento, ip, user_agent, t))
+
+    async def listar_acessos(self, usuario_id: int | None, limite: int) -> list[RegistroAcesso]:
+        filtrados = [a for a in self._acessos if usuario_id is None or a.usuario_id == usuario_id]
+        return sorted(filtrados, key=lambda a: (a.t, a.id), reverse=True)[:limite]
+
+    async def registrar_auditoria(
+        self,
+        admin_id: int,
+        acao: str,
+        alvo: str,
+        antes: dict[str, Any] | None,
+        depois: dict[str, Any] | None,
+        t: InstanteMs,
+    ) -> None:
+        self._auditoria.append(
+            RegistroAuditoria(
+                self._id(), admin_id, acao, alvo, copy.deepcopy(antes), copy.deepcopy(depois), t
+            )
+        )
+
+    async def listar_auditoria(self, limite: int) -> list[RegistroAuditoria]:
+        return sorted(self._auditoria, key=lambda r: (r.t, r.id), reverse=True)[:limite]
+
+    async def payouts_vigentes(self, corretora: str, agora: InstanteMs) -> list[ItemPayout]:
+        vigentes = [
+            p.item
+            for p in self._payouts
+            if p.corretora == corretora
+            and p.valido_de <= agora
+            and (p.valido_ate is None or agora < p.valido_ate)
+        ]
+        return sorted(vigentes, key=chave_payout)
+
+    async def substituir_payouts(
+        self, corretora: str, itens: Sequence[ItemPayout], agora: InstanteMs
+    ) -> None:
+        self._payouts = [
+            replace(p, valido_ate=agora) if p.corretora == corretora and p.valido_ate is None else p
+            for p in self._payouts
+        ]
+        self._payouts.extend(_Payout(corretora, i, agora, None) for i in itens)
