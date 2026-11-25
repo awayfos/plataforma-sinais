@@ -14,5 +14,5 @@ class PublicadorRedis:
         self._maxlen = maxlen
 
     async def publicar(self, stream: str, campos: Mapping[str, str]) -> None:
-        dados: dict[FieldT, EncodableT] = dict(campos)
+        dados: dict[FieldT, EncodableT] = {k: v for k, v in campos.items()}
         await self._redis.xadd(stream, dados, maxlen=self._maxlen, approximate=True)
