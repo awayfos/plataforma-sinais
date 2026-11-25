@@ -1,0 +1,33 @@
+name: Modelos
+
+# Treina e avalia os modelos em walk-forward sobre o histórico oficial da Binance e
+# publica o relatório de decisão (ligar / não ligar por ativo e expiração). Disparo manual.
+on:
+  workflow_dispatch:
+    inputs:
+      meses:
+        description: "Meses de histórico"
+        default: "24"
+      payout:
+        description: "Payout da corretora (fração)"
+        default: "0.85"
+
+jobs:
+  modelos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run python -m sinais.modelos.decisao --meses "${{ inputs.meses }}" --payout "${{ inputs.payout }}" --saida relatorio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: relatorio-modelos
+          path: backend/relatorio/
