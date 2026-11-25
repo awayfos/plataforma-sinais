@@ -62,6 +62,9 @@ jobs:
       - run: npm run e2e
         env:
           CI: "1"
+      - name: Capturas no log (base64, para revisão sem acesso aos artefatos)
+        if: always()
+        run: for f in capturas/*.jpg; do [ -f "$f" ] && { echo "CAPTURA $f"; base64 -w0 "$f"; echo; }; done || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
