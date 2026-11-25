@@ -25,22 +25,24 @@
 - A calibração está boa: o erro de calibração ficou entre 0,7% e 2,3%. Quando o modelo diz 55%, a taxa real fica perto de 55%.
 - As linhas de 1m e 5m usam entrada na abertura do minuto, um limite superior otimista. Em 1 min, 41% das operações do BTC terminam apertadas (Fase 5), então o 1m real deve ser pior que o mostrado.
 
-## 3. O que decide a viabilidade
+## 3. Com o payout real informado pelo cliente (86% a 89%)
 
-O payout real da Exnova. O ponto de equilíbrio é 1/(1 + payout):
+| Payout | Equilíbrio | Aprovada no walk-forward | Validação realista com 1 s (holdout) |
+|---|---|---|---|
+| 86% | 53,76% | BTC 1m (55,42%, Wilson 54,95%) | **reprovada**: 54,10%, Wilson 52,98%, 62% das operações apertadas |
+| 89% | 52,91% | BTC 1m (54,83%) | não repetida: o caso de 86% já reprova o 1m na prática |
 
-| Payout | Equilíbrio | Combinações acima do equilíbrio + 1 p.p. (pelo Wilson) |
-|---|---|---|
-| 85% | 54,05% | nenhuma |
-| 88% | 53,19% | BTC 1m, ETH 5m, ETH 15m |
-| 90% | 52,63% | BTC 1m, BTC 15m, ETH 1m, ETH 5m, ETH 15m |
+- Com a entrada realista (2 s depois do sinal até o prazo de compra, preço do segundo), a taxa do BTC 1m cai de 56,2% para **54,1%**. Isso continua acima do equilíbrio de 53,76%, mas sem significância: o limite de Wilson fica em 52,98%.
+- **62% das operações de 1 min do holdout terminaram apertadas.** Qualquer diferença entre o preço da Binance e o da Exnova pode inverter esses resultados.
+- ETH 5m e 15m ficaram perto (54,5% a 55,1% fora da amostra), mas não se confirmaram no holdout.
 
-A tabela é só uma referência: com outro payout, o relatório precisa ser gerado de novo (workflow "Modelos"), porque o limiar de decisão muda junto.
+**Decisão técnica:** nenhuma combinação está validada para vender sinais hoje. Pela regra do produto, a plataforma mostra AGUARDAR em todas.
 
 ## 4. Próximo passo (decisão do cliente)
 
-1. Informar o payout real da Exnova por expiração e rodar o workflow "Modelos" com ele.
-2. Se alguma combinação for aprovada, seguir para a Fase 7 (motor de sinais ao vivo e 60 a 90 dias de teste ao vivo) só com ela.
-3. Se nenhuma for aprovada, as alternativas são:
-   - melhorar o modelo com mais features (por exemplo, livro de ofertas e funding), com dados de 1 s e com ajuste de hiperparâmetros em validação;
-   - lançar o produto como painel de análise (caminho B), sem sinais.
+1. **Melhorar o modelo e repetir o teste** (recomendado antes de vender sinais):
+   - treinar e validar 1m e 5m direto com dados de 1 s;
+   - acrescentar informação de microestrutura (fluxo de agressão por segundo, livro de ofertas);
+   - fazer seleção de features e ajuste em validação.
+2. **Lançar como painel de análise** (caminho B), sem sinais, enquanto o modelo amadurece.
+3. **As duas coisas em paralelo:** construir a plataforma web (Fases 8 a 10) com o painel de análise e ativar sinais só quando um modelo passar na validação.

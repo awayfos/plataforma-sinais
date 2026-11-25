@@ -5,7 +5,8 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 ## Estado atual
 
 - **Fase atual:** 6 — Modelos (concluída). **Portão de decisão do cliente** antes da Fase 7.
-- **Resultado da Fase 6:** modelos 53–55,5% fora da amostra (estratégias simples ~50%); nenhuma combinação aprovada com payout hipotético de 85% (equilíbrio 54,05%). Viabilidade depende do payout real da Exnova (`docs/fases/fase-06.md`).
+- **Resultado da Fase 6:** modelos 53–55,5% fora da amostra (estratégias simples ~50%). Com o payout real da Exnova (86–89%), só BTC 1m passou no walk-forward, mas foi **reprovado na validação realista com 1 s** (54,10%, Wilson 52,98% < equilíbrio 53,76%; 62% das operações apertadas). Nenhuma combinação validada para sinais (`docs/fases/fase-06.md`).
+- **Payout da Exnova (informado pelo cliente):** 86% a 89%.
 - **Primeiro resultado real:** estratégias simples ~50% de acerto contra 54,05% de equilíbrio (payout 0,85 hipotético) → valor esperado ≈ −7% por operação (`docs/laboratorio/2026-11-25-baselines.md`). Com preços de 1 s: até 51,1%, e 41% das operações de 1 min do BTC terminam "apertadas" (`docs/laboratorio/2026-11-25-baselines-1s.md`)
 - **Status:** Fase 3 com CI verde, incluindo coleta real da Binance e conferência com os klines oficiais
 - **Repositório:** https://github.com/awayfos/plataforma-sinais (privado)
@@ -53,7 +54,7 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 - Teste de 72 h ao vivo do coletor: exige servidor.
 
 - Parecer jurídico sobre CVM e defesa do consumidor (portão da Fase 11).
-- Payout e regra de empate de cada ativo na Exnova (cadastro no admin).
+- Regra de empate confirmada pela pesquisa (devolve o valor); payout informado: 86% a 89%.
 - Grade de vencimento e corte de compra de 5 min, 30 min e 1 h na Exnova (confirmar antes da Fase 5). Já confirmados: 1 min (corte com 30 s restantes) e 15 min (corte 5 min antes).
 - Orçamento de dados: zero no início. V1 só com BTC e ETH. Forex, metais e ações quando houver verba.
 - Mercado de venda e país da empresa (escopo do parecer jurídico, Fase 6).
