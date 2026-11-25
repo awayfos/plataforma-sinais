@@ -4,7 +4,7 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 
 ## Estado atual
 
-- **Fase atual:** 3 — Dados de mercado (concluída), próxima: 4 — Motores de análise
+- **Fase atual:** 4 — Motores de análise (concluída), próxima: 5 — Backtesting e validação
 - **Status:** Fase 3 com CI verde, incluindo coleta real da Binance e conferência com os klines oficiais
 - **Repositório:** https://github.com/awayfos/plataforma-sinais (privado)
 - **Modo de trabalho:** o cliente pediu em 2026-11-25 para seguir sem pausa de aprovação entre fases. Os portões de decisão (Fase 6, jurídico, lançamento) continuam com ele.
@@ -16,7 +16,7 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 | 1 | Planejamento e arquitetura | Aprovada | 2026-11-25 |
 | 2 | Estrutura inicial | Concluída (`docs/fases/fase-02.md`) | 2026-11-25 |
 | 3 | Dados de mercado | Concluída (`docs/fases/fase-03.md`) | 2026-11-25 |
-| 4 | Motores de análise | Não iniciada | — |
+| 4 | Motores de análise | Concluída (`docs/fases/fase-04.md`) | 2026-11-25 |
 | 5 | Backtesting e validação | Não iniciada | — |
 | 6 | Modelos e calibração (relatório de decisão) | Não iniciada | — |
 | 7 | Motor de sinais ao vivo (início do teste de 60 a 90 dias) | Não iniciada | — |
