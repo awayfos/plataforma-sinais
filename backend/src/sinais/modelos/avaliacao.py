@@ -42,6 +42,7 @@ class ResultadoCombinacao:
     dobras: int
     meses_testados: int = 0
     avisos: list[str] = field(default_factory=list)
+    sinais_holdout: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def sinais_do_modelo(decisoes: np.ndarray, p: np.ndarray, limiar: float) -> pd.DataFrame:
@@ -79,7 +80,7 @@ def _avaliar_periodo(
     limiar: float,
     subamostra: int,
     embargo_ms: int,
-) -> tuple[pd.DataFrame, float]:
+) -> tuple[pd.DataFrame, float, pd.DataFrame]:
     regra = perfil.regras[expiracao]
     m_tr = mascara_periodo(rot, *treino, calib[0], embargo_ms).to_numpy() & (
         np.arange(len(rot)) % subamostra == 0
@@ -93,7 +94,7 @@ def _avaliar_periodo(
     definido = ~np.isnan(alvo_te)
     erro = ece(p[definido], alvo_te[definido])
     sinais = sinais_do_modelo(rot["decisao"].to_numpy()[m_te], p, limiar)
-    return simular(sinais, precos, regra), erro
+    return simular(sinais, precos, regra), erro, sinais
 
 
 def avaliar_combinacao(
@@ -125,7 +126,7 @@ def avaliar_combinacao(
     base: dict[str, list[pd.DataFrame]] = {nome: [] for nome in BASELINES}
     for d in ds:
         try:
-            ops, erro = _avaliar_periodo(
+            ops, erro, _ = _avaliar_periodo(
                 df_1m,
                 rot,
                 x,
@@ -157,6 +158,7 @@ def avaliar_combinacao(
             )
             base[nome].append(simular(sinais_base, precos, regra))
     holdout = pd.DataFrame(columns=["resultado", "entrada_t"])
+    sinais_holdout = pd.DataFrame(columns=["decisao", "direcao"])
     if holdout_meses:
         h_ini = _somar_meses(fim, -holdout_meses)
         h_ini = h_ini if h_ini >= inicio else inicio
@@ -164,7 +166,7 @@ def avaliar_combinacao(
         tre = (_somar_meses(cal[0], -treino_meses), cal[0])
         if tre[0] >= inicio:
             try:
-                holdout, _ = _avaliar_periodo(
+                holdout, _, sinais_holdout = _avaliar_periodo(
                     df_1m,
                     rot,
                     x,
@@ -190,4 +192,5 @@ def avaliar_combinacao(
         dobras=len(partes),
         meses_testados=len(ds),
         avisos=avisos,
+        sinais_holdout=sinais_holdout,
     )
