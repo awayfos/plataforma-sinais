@@ -1,0 +1,32 @@
+name: Laboratório
+
+# Executa o backtest das estratégias simples sobre o histórico oficial da Binance
+# e publica o relatório como artefato. Disparo manual.
+on:
+  workflow_dispatch:
+    inputs:
+      meses:
+        description: "Meses de histórico (até o último mês completo)"
+        default: "24"
+      payout:
+        description: "Payout da corretora (fração, ex.: 0.85)"
+        default: "0.85"
+
+jobs:
+  laboratorio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run python -m sinais.backtest.laboratorio --meses "${{ inputs.meses }}" --payout "${{ inputs.payout }}" --saida relatorio
+      - uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-laboratorio
+          path: backend/relatorio/

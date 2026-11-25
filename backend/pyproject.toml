@@ -13,6 +13,7 @@ dependencies = [
     "redis>=6,<8",
     "pandas>=2.2,<4",
     "numpy>=2,<3",
+    "scipy>=1.13,<2",
 ]
 
 [dependency-groups]
@@ -44,7 +45,7 @@ files = ["src", "tests"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "asyncpg", "websockets", "websockets.*", "sqlalchemy", "sqlalchemy.*", "alembic", "alembic.*", "redis", "redis.*", "pandas", "pandas.*"]
+module = ["asyncpg.*", "asyncpg", "websockets", "websockets.*", "sqlalchemy", "sqlalchemy.*", "alembic", "alembic.*", "redis", "redis.*", "pandas", "pandas.*", "scipy", "scipy.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
