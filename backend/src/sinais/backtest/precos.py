@@ -53,3 +53,29 @@ class SeriePrecos:
             return float(self._o[k])
         j = self._indice(t - g)
         return float(self._c[j]) if j is not None else None
+
+    def precos_em(self, ts: np.ndarray) -> np.ndarray:
+        """Versão vetorizada de ``preco_em``: NaN onde não há preço."""
+        ts = np.asarray(ts, dtype="int64")
+        g = self.granularidade_ms
+        saida = np.full(len(ts), np.nan)
+        if not len(self._t):
+            return saida
+        if g == 1000:
+            i = np.searchsorted(self._t, ts - g, side="right") - 1
+            ok = (i >= 0) & (self._t[np.clip(i, 0, None)] >= ts - 3 * g)
+            saida[ok] = self._c[i[ok]]
+            return saida
+        borda = ts % g == 0
+
+        def achar(alvo: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+            j = np.clip(np.searchsorted(self._t, alvo), 0, len(self._t) - 1)
+            return j, self._t[j] == alvo
+
+        j, ok = achar(ts)
+        usa_abertura = borda & ok
+        saida[usa_abertura] = self._o[j[usa_abertura]]
+        k, ok2 = achar(ts - g)
+        usa_fecha = borda & ~ok & ok2
+        saida[usa_fecha] = self._c[k[usa_fecha]]
+        return saida
