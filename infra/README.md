@@ -25,4 +25,5 @@ docker compose -f infra/docker-compose.yml --env-file .env exec api \
   python -m sinais.processos.criar_admin --email admin@exemplo.com
 ```
 
+- Atrás de um proxy reverso (nginx, Caddy), defina `SINAIS_CONFIAR_PROXY=true` e faça o proxy acrescentar o IP real em `X-Forwarded-For`: sem isso todos os usuários aparecem com o IP do proxy e dividem o mesmo limite de tentativas de login.
 - `infra/fumaca.sh` sobe tudo, cria admin e cliente pela API e confere `/api/candles`, `/api/analise` e `/api/sinais`.

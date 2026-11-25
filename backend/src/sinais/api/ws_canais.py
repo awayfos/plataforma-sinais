@@ -146,3 +146,14 @@ def traduzir_evento(
     except (KeyError, ValueError, InvalidOperation):
         return []
     return []
+
+
+def ip_do_cliente(conexao: str | None, encaminhado: str | None, confiar_proxy: bool) -> str:
+    """IP para limites e logs. Atrás do proxy confiável vale a ÚLTIMA entrada de
+    ``X-Forwarded-For`` (a que o proxy acrescentou); as anteriores vêm do cliente e podem ser
+    forjadas para fugir do limite por IP."""
+    if confiar_proxy and encaminhado:
+        ultimo = encaminhado.split(",")[-1].strip()
+        if ultimo:
+            return ultimo[:64]
+    return (conexao or "desconhecido")[:64]

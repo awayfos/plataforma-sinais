@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from sinais.api.servicos import Servicos
+from sinais.api.ws_canais import ip_do_cliente
 from sinais.contas.contexto import Contexto
 
 COOKIE_SESSAO = "sinais_sessao"
@@ -23,12 +24,9 @@ Svc = Annotated[Servicos, Depends(servicos)]
 
 
 def ip_cliente(request: Request, s: Servicos) -> str:
-    if s.confiar_proxy:
-        encaminhado: str | None = request.headers.get("x-forwarded-for")
-        if encaminhado:
-            return encaminhado.split(",")[0].strip()[:64]
-    host: str = request.client.host if request.client else "desconhecido"
-    return host[:64]
+    conexao: str | None = request.client.host if request.client else None
+    encaminhado: str | None = request.headers.get("x-forwarded-for")
+    return ip_do_cliente(conexao, encaminhado, s.confiar_proxy)
 
 
 async def sessao(request: Request, s: Svc) -> Contexto:

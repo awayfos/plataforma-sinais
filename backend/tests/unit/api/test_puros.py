@@ -189,3 +189,15 @@ def test_traduzir_candle_fechado_e_analise() -> None:
     assert traduzir_evento("outro", {}) == []
     assert traduzir_evento("candle.fechado", {"lixo": "1"}) == []
     assert canais[0][1]["t"] == 1
+
+
+def test_ip_do_cliente_usa_a_ultima_entrada_do_proxy_confiavel() -> None:
+    from sinais.api.ws_canais import ip_do_cliente
+
+    assert ip_do_cliente("10.0.0.5", None, confiar_proxy=False) == "10.0.0.5"
+    assert ip_do_cliente("10.0.0.5", "6.6.6.6", confiar_proxy=False) == "10.0.0.5"
+    # o cliente pode forjar o início da lista; o proxy acrescenta o IP real no fim
+    assert ip_do_cliente("10.0.0.5", "6.6.6.6, 203.0.113.9", confiar_proxy=True) == "203.0.113.9"
+    assert ip_do_cliente("10.0.0.5", " ", confiar_proxy=True) == "10.0.0.5"
+    assert ip_do_cliente(None, None, confiar_proxy=True) == "desconhecido"
+    assert len(ip_do_cliente("x" * 100, None, confiar_proxy=False)) == 64

@@ -48,6 +48,7 @@ services:
       SINAIS_SESSOES_SIMULTANEAS: ${SINAIS_SESSOES_SIMULTANEAS:-1}
       SINAIS_REGISTRO_MODELOS: ${SINAIS_REGISTRO_MODELOS:-/app/registro}
       SINAIS_ORIGENS_PERMITIDAS: ${SINAIS_ORIGENS_PERMITIDAS:-}
+      SINAIS_CONFIAR_PROXY: ${SINAIS_CONFIAR_PROXY:-false}
     depends_on:
       db:
         condition: service_healthy
