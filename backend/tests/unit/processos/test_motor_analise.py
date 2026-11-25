@@ -268,7 +268,7 @@ def test_motor_sem_dados_nao_publica() -> None:
 
 
 def test_decimal_texto_sem_zeros_e_sem_expoente() -> None:
-    from sinais.processos.motor_analise import decimal_texto
+    from sinais.api.esquemas import decimal_texto
 
     assert decimal_texto(Decimal("50000.100000000000")) == "50000.1"
     assert decimal_texto(Decimal("30000.000000000000")) == "30000"

@@ -18,7 +18,6 @@ import math
 import signal
 from collections import deque
 from collections.abc import Mapping, Sequence
-from decimal import Decimal
 
 import pandas as pd
 
@@ -33,6 +32,7 @@ from sinais.api.esquemas import (
     Regioes,
     TempoTendencia,
     VolumeAnalise,
+    decimal_texto,
 )
 from sinais.dados.modelos import Candle, IntervaloColeta
 from sinais.eventos.contratos import (
@@ -54,14 +54,6 @@ _TENDENCIAS: tuple[tuple[TempoTendencia, str], ...] = (
     ("15m", "m15_est_tendencia"),
     ("1h", "h1_est_tendencia"),
 )
-
-
-def decimal_texto(d: Decimal) -> str:
-    """Decimal sem zeros à direita e sem notação científica (``50000.100000`` → ``50000.1``)."""
-    texto = format(d, "f")
-    if "." in texto:
-        texto = texto.rstrip("0").rstrip(".")
-    return texto or "0"
 
 
 def _num(x: object, casas: int = 2) -> float | None:

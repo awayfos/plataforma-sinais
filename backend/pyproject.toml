@@ -57,6 +57,11 @@ mypy_path = "src"
 module = ["asyncpg.*", "asyncpg", "websockets", "websockets.*", "sqlalchemy", "sqlalchemy.*", "alembic", "alembic.*", "redis", "redis.*", "pandas", "pandas.*", "scipy", "scipy.*", "sklearn", "sklearn.*", "joblib", "joblib.*", "fastapi", "fastapi.*", "starlette", "starlette.*", "uvicorn", "uvicorn.*", "argon2", "argon2.*", "pyotp", "pyotp.*"]
 ignore_missing_imports = true
 
+# Os decoradores do FastAPI são tipados, mas o FastAPI só existe no ambiente do CI.
+[[tool.mypy.overrides]]
+module = ["sinais.api.*", "tests.unit.api.*", "tests.integracao.*"]
+disallow_untyped_decorators = false
+
 [tool.ruff]
 line-length = 100
 target-version = "py313"

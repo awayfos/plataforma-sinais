@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sinais.contas.limites import ContadorMemoria
+from sinais.contas.limites import ContadorLimites, ContadorMemoria
 from sinais.contas.memoria import RepositorioContasMemoria
 from sinais.contas.modelos import NovoPlano, NovoUsuario, Papel, Plano, Recursos, Usuario
+from sinais.contas.repositorio import RepositorioContas
 from sinais.contas.seguranca import CifraSegredos
 from sinais.contas.servico import ParametrosContas, ServicoContas
 from sinais.core.tempo import RelogioFixo
@@ -59,18 +60,22 @@ class TotpFalso:
 
 @dataclass
 class Ambiente:
-    repo: RepositorioContasMemoria
+    repo: RepositorioContas
     relogio: RelogioFixo
-    contador: ContadorMemoria
+    contador: ContadorLimites
     hasher: HasherFalso
     cifra: CifraSegredos
     servico: ServicoContas
 
 
-def ambiente(params: ParametrosContas | None = None) -> Ambiente:
-    repo = RepositorioContasMemoria()
+def ambiente(
+    params: ParametrosContas | None = None,
+    repo: RepositorioContas | None = None,
+    contador: ContadorLimites | None = None,
+) -> Ambiente:
+    repo = repo if repo is not None else RepositorioContasMemoria()
     relogio = RelogioFixo(T0)
-    contador = ContadorMemoria(relogio)
+    contador = contador if contador is not None else ContadorMemoria(relogio)
     hasher = HasherFalso()
     cifra = CifraSegredos(bytes(range(32)))
     servico = ServicoContas(
