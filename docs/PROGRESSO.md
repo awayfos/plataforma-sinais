@@ -4,17 +4,18 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 
 ## Estado atual
 
-- **Fase atual:** 2 — Estrutura inicial
-- **Status:** implementada na branch `fase-02-estrutura-inicial`, aguardando aprovação do cliente
-- **Próximo passo:** aprovação da Fase 2 → plano da Fase 3 (dados de mercado da Binance)
+- **Fase atual:** 3 — Dados de mercado (concluída), próxima: 4 — Motores de análise
+- **Status:** Fase 3 com CI verde, incluindo coleta real da Binance e conferência com os klines oficiais
+- **Repositório:** https://github.com/awayfos/plataforma-sinais (privado)
+- **Modo de trabalho:** o cliente pediu em 2026-11-25 para seguir sem pausa de aprovação entre fases. Os portões de decisão (Fase 6, jurídico, lançamento) continuam com ele.
 
 ## Fases
 
 | Fase | Nome | Status | Aprovada em |
 |---|---|---|---|
 | 1 | Planejamento e arquitetura | Aprovada | 2026-11-25 |
-| 2 | Estrutura inicial | Em revisão (`docs/fases/fase-02.md`) | — |
-| 3 | Dados de mercado | Não iniciada | — |
+| 2 | Estrutura inicial | Concluída (`docs/fases/fase-02.md`) | 2026-11-25 |
+| 3 | Dados de mercado | Concluída (`docs/fases/fase-03.md`) | 2026-11-25 |
 | 4 | Motores de análise | Não iniciada | — |
 | 5 | Backtesting e validação | Não iniciada | — |
 | 6 | Modelos e calibração (relatório de decisão) | Não iniciada | — |
@@ -42,10 +43,12 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 - Design da Fase 1: `docs/superpowers/specs/2026-11-25-plataforma-sinais-design.md`
 - Plano da Fase 2: `docs/superpowers/plans/2026-11-25-fase-02-estrutura-inicial.md`
 - Registro da Fase 2: `docs/fases/fase-02.md`
+- Plano e registro da Fase 3: `docs/superpowers/plans/2026-11-25-fase-03-dados-binance.md`, `docs/fases/fase-03.md`
 
 ## Pendências
 
-- Rede para instalar pacotes: liberar para rodar ruff, gerar `uv.lock` e subir o Docker Compose.
+- `uv.lock`: gerar com rede para builds reproduzíveis.
+- Teste de 72 h ao vivo do coletor: exige servidor.
 
 - Parecer jurídico sobre CVM e defesa do consumidor (portão da Fase 11).
 - Payout e regra de empate de cada ativo na Exnova (cadastro no admin).
