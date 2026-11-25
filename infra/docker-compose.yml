@@ -29,22 +29,36 @@ services:
       retries: 20
     restart: unless-stopped
 
-  backend:
+  migracoes:
     build:
       context: ../backend
       dockerfile: ../infra/docker/backend.Dockerfile
-    environment:
+    environment: &ambiente_backend
       SINAIS_AMBIENTE: ${SINAIS_AMBIENTE:-dev}
       SINAIS_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SINAIS_REDIS_URL: redis://redis:6379/0
       SINAIS_NIVEL_LOG: ${SINAIS_NIVEL_LOG:-INFO}
+      SINAIS_HISTORICO_DIAS: ${SINAIS_HISTORICO_DIAS:-730}
+      SINAIS_HISTORICO_DIAS_1S: ${SINAIS_HISTORICO_DIAS_1S:-2}
+      SINAIS_BINANCE_REST_URL: ${SINAIS_BINANCE_REST_URL:-https://api.binance.com}
+      SINAIS_BINANCE_WS_URL: ${SINAIS_BINANCE_WS_URL:-wss://data-stream.binance.vision}
     depends_on:
       db:
         condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  coletor:
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    environment: *ambiente_backend
+    depends_on:
+      migracoes:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
-    # Até existir um processo real (Fase 3), só confirma que a configuração e o pacote carregam.
-    command: ["python", "-c", "import sinais; from sinais.core.config import carregar_configuracao; carregar_configuracao(); print('sinais', sinais.__version__, 'ok')"]
+    command: ["python", "-m", "sinais.processos.coletor_binance"]
+    restart: unless-stopped
 
 volumes:
   dados_db:

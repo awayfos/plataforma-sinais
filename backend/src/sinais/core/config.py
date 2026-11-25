@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
 _ESQUEMAS_DB = ("postgresql://", "postgresql+", "postgres://")
 _ESQUEMAS_REDIS = ("redis://", "rediss://")
@@ -31,6 +31,8 @@ class Configuracao(BaseModel):
     nivel_log: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     binance_ws_url: str = "wss://data-stream.binance.vision"
     binance_rest_url: str = "https://api.binance.com"
+    historico_dias: int = Field(default=730, ge=1, le=3650)
+    historico_dias_1s: int = Field(default=2, ge=1, le=30)
 
     @field_validator("database_url")
     @classmethod

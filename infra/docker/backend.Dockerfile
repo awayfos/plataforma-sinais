@@ -5,8 +5,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 FROM base AS deps
-COPY pyproject.toml ./
+COPY pyproject.toml alembic.ini ./
 COPY src ./src
+COPY migracoes ./migracoes
 # Trocar por `uv sync --frozen --no-dev` assim que uv.lock for gerado (requer rede).
 RUN uv sync --no-dev
 
