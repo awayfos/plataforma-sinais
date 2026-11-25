@@ -55,3 +55,26 @@ def test_margem_com_sinal_da_direcao() -> None:
     r = simular(sinais((T0 + 3 * M, -1)), PRECOS, UM)
     assert resultados(r) == ["WIN"]
     assert r["margem"][0] == 2.0
+
+
+def test_decisao_fora_da_fronteira_com_precos_de_1m_vira_sem_dado() -> None:
+    r = simular(sinais((T0 + M + 10_000, 1)), PRECOS, UM)
+    assert resultados(r) == ["SEM_DADO"]
+
+
+def test_entrada_aleatoria_dentro_da_janela_com_1s() -> None:
+    idx = pd.Index([T0 + i * 1000 for i in range(200)], name="abertura")
+    c = [100.0 + 0.01 * i for i in range(200)]
+    df = pd.DataFrame({"o": c, "c": c}, index=idx)
+    s1 = SeriePrecos.de_quadro(df, 1000)
+    r = simular(sinais((T0 + M, 1), (T0 + 2 * M, 1)), s1, UM, entrada_aleatoria=True, semente=1)
+    prazo = UM.prazo_compra(T0 + 2 * M)
+    assert T0 + M + 2000 <= r["entrada_t"][0] <= prazo
+    assert r["entrada_t"][0] % 1000 == 0
+    assert resultados(r)[0] == "WIN"
+
+
+def test_apertado_marcado() -> None:
+    quase = SeriePrecos.de_quadro(quadro([100.0, 100.005, 100.005]), M)
+    r = simular(sinais((T0 + M, 1)), quase, UM)
+    assert bool(r["apertado"][0]) is True

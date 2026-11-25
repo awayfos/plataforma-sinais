@@ -39,6 +39,8 @@ class Metricas:
     p_equilibrio: float
     valor_esperado: float  # por operação liquidada, em unidades do valor investido
     pvalor: float
+    apertados: int = 0
+    taxa_sem_apertados: float = math.nan
 
 
 def pvalor_acima_equilibrio(acertos: int, n: int, p_eq: float) -> float:
@@ -55,6 +57,13 @@ def calcular(operacoes: pd.DataFrame, payout: float) -> Metricas:
     n = decididas + ties
     p_eq = ponto_equilibrio(payout)
     inf, sup = wilson(wins, decididas)
+    apertados = 0
+    taxa_sem = wins / decididas if decididas else math.nan
+    if "apertado" in operacoes and len(operacoes):
+        firmes = operacoes[~operacoes["apertado"].astype(bool)]["resultado"]
+        apertados = int(operacoes["apertado"].astype(bool).sum())
+        fw, fl = int((firmes == "WIN").sum()), int((firmes == "LOSS").sum())
+        taxa_sem = fw / (fw + fl) if fw + fl else math.nan
     return Metricas(
         n=n,
         wins=wins,
@@ -68,6 +77,8 @@ def calcular(operacoes: pd.DataFrame, payout: float) -> Metricas:
         p_equilibrio=p_eq,
         valor_esperado=(wins * payout - losses) / n if n else math.nan,
         pvalor=pvalor_acima_equilibrio(wins, decididas, p_eq),
+        apertados=apertados,
+        taxa_sem_apertados=taxa_sem,
     )
 
 
