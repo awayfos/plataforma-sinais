@@ -64,7 +64,9 @@ Resultado no CI (versões resolvidas: Next 16, React 19.3.1, TypeScript 5.9.3, T
 - Vitest: **18 arquivos, 77 testes, todos passando** (API e CSRF, WebSocket e reconexão, proxy, indicadores com valores calculados à mão, formatação pt-BR, login com TOTP, troca de senha, modo, lista de ativos, candle ao vivo, tabela de sinais, painel de análise, cartão com janela, histórico, usuários e payout do admin).
 - Lint: 0 erros (4 avisos de `window.location.assign`, mantido de propósito para recarregar a página e limpar o estado ao perder a sessão).
 - Build: 16 rotas.
-- Playwright: login com TOTP, credenciais inválidas, terminal com 5 AGUARDAR e candle ao vivo pelo WebSocket simulado, modo Avançado salvo, 402 → assinatura, troca de tempo gráfico, admin lista usuários, cliente sem acesso ao admin, capturas de tela. Os dados das simulações ficam em `frontend/e2e/mocks.ts`, rotulados como simulação.
+- Playwright: **10 testes passando** — login com TOTP, credenciais inválidas, terminal com 5 AGUARDAR e candle ao vivo pelo WebSocket simulado, modo Avançado salvo, 402 → assinatura, troca de tempo gráfico, admin lista usuários, cliente sem acesso ao admin, e capturas de tela (terminal Avançado e Essencial, celular, histórico, perfil, admin, login). Os dados das simulações ficam em `frontend/e2e/mocks.ts`, rotulados como simulação.
+
+Revisão visual: as capturas do CI saem também no log do job (em base64), porque o ambiente de desenvolvimento não acessa o armazenamento de artefatos do GitHub. A revisão delas encontrou e corrigiu: o gráfico passava da altura da janela e escondia o volume e o painel RSI; campos de busca do admin com classes de largura em conflito; seletor de modo esticado no perfil; cabeçalho apertado no celular.
 
 ## 5. Pendências
 
