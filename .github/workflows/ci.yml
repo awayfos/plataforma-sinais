@@ -55,3 +55,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f infra/docker-compose.yml --env-file .env.example config -q
+
+  fumaca:
+    # Sobe o ambiente completo e coleta dados reais da Binance (endpoint só de dados de mercado).
+    runs-on: ubuntu-latest
+    needs: [backend, integracao, infra]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ambiente de teste
+        run: |
+          cp .env.example .env.ci
+          sed -i 's#^SINAIS_BINANCE_REST_URL=.*#SINAIS_BINANCE_REST_URL=https://data-api.binance.vision#' .env.ci
+          sed -i 's#^SINAIS_HISTORICO_DIAS=.*#SINAIS_HISTORICO_DIAS=1#' .env.ci
+          sed -i 's#^SINAIS_HISTORICO_DIAS_1S=.*#SINAIS_HISTORICO_DIAS_1S=1#' .env.ci
+      - run: ENV_FILE=.env.ci infra/fumaca.sh
