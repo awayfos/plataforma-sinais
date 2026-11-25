@@ -9,7 +9,7 @@ import { ROTULO_EXPIRACAO } from "@/lib/sinais";
 import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
 import { Carregando, ErroEstado } from "@/components/ui/Estado";
-import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
+import { botao, campoBase, painel, rotulo, tabela } from "@/components/ui/estilos";
 
 const chave = (p: { simbolo: string; expiracao: string }) => `${p.simbolo}:${p.expiracao}`;
 const paraPercentual = (fracao: number) => String(Math.round(fracao * 10_000) / 100);
@@ -96,7 +96,7 @@ export function EditorPayout() {
                       aria-invalid={n === null}
                       value={v}
                       onChange={(e) => setEdicoes((x) => ({ ...x, [chave(p)]: e.target.value }))}
-                      className={`${campo} num w-28 py-1 ${n === null ? "border-baixa" : ""}`}
+                      className={`${campoBase} num w-28 py-1 ${n === null ? "ring-1 ring-baixa" : ""}`}
                     />
                   </td>
                   <td className={`${tabela.td} num text-right text-suave`}>{n === null ? "—" : formatarPercentual(1 / (1 + n / 100), 2)}</td>
@@ -111,11 +111,11 @@ export function EditorPayout() {
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label htmlFor="np-simbolo" className={rotulo}>Ativo</label>
-          <input id="np-simbolo" value={novoSimbolo} onChange={(e) => setNovoSimbolo(e.target.value.toUpperCase())} className={`${campo} num w-32 py-1.5`} />
+          <input id="np-simbolo" value={novoSimbolo} onChange={(e) => setNovoSimbolo(e.target.value.toUpperCase())} className={`${campoBase} num w-32 py-1.5`} />
         </div>
         <div>
           <label htmlFor="np-exp" className={rotulo}>Expiração</label>
-          <select id="np-exp" value={novaExpiracao} onChange={(e) => setNovaExpiracao(e.target.value as Expiracao)} className={`${campo} w-28 py-1.5`}>
+          <select id="np-exp" value={novaExpiracao} onChange={(e) => setNovaExpiracao(e.target.value as Expiracao)} className={`${campoBase} w-28 py-1.5`}>
             {EXPIRACOES.map((x) => (
               <option key={x} value={x}>{ROTULO_EXPIRACAO[x]}</option>
             ))}

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { ErroApi } from "@/lib/api/cliente";
 import { api } from "@/lib/api/endpoints";
-import { botao, campo, rotulo } from "@/components/ui/estilos";
+import { botao, campo, campoBase, rotulo } from "@/components/ui/estilos";
 
 /** Só caminhos internos (evita redirecionamento aberto). */
 export function destinoSeguro(proximo: string | null | undefined): string {
@@ -93,7 +93,7 @@ export function FormLogin({ proximo }: { proximo?: string | null }) {
             required
             value={totp}
             onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
-            className={`${campo} num text-center text-lg tracking-[0.5em]`}
+            className={`${campoBase} num text-center text-lg tracking-[0.5em] py-2 w-full`}
           />
         </div>
       )}

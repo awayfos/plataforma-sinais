@@ -8,7 +8,7 @@ import { formatarMoeda } from "@/lib/formato";
 import { ROTULO_EXPIRACAO } from "@/lib/sinais";
 import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
-import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
+import { botao, campo, campoBase, painel, rotulo, tabela } from "@/components/ui/estilos";
 
 type Rascunho = Omit<Plano, "id"> & { id?: Plano["id"] };
 
@@ -57,11 +57,11 @@ function FormPlano({ inicial, simbolos, aoSalvar, aoCancelar }: { inicial: Rascu
         </div>
         <div>
           <label htmlFor="pl-dur" className={rotulo}>Duração (dias)</label>
-          <input id="pl-dur" type="number" min={1} value={r.duracao_dias} onChange={(e) => setR({ ...r, duracao_dias: Number(e.target.value) })} className={`${campo} num`} />
+          <input id="pl-dur" type="number" min={1} value={r.duracao_dias} onChange={(e) => setR({ ...r, duracao_dias: Number(e.target.value) })} className={`${campoBase} num py-2 w-full`} />
         </div>
         <div>
           <label htmlFor="pl-preco" className={rotulo}>Preço (R$)</label>
-          <input id="pl-preco" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} className={`${campo} num`} />
+          <input id="pl-preco" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} className={`${campoBase} num py-2 w-full`} />
         </div>
       </div>
       <fieldset>

@@ -1,0 +1,75 @@
+# Fase 9 — Plataforma web (frontend) e interface do admin
+
+- **Status:** implementada no PR #13 (`plataforma-frontend`), aguardando revisão e aprovação visual do cliente.
+- **Plano:** `docs/superpowers/plans/2026-11-25-plataforma-frontend.md`
+- **Contrato:** `docs/api/contrato-v1.md` (o frontend foi escrito contra ele; o backend da Fase 8 é desenvolvido em paralelo)
+- **Como rodar:** `frontend/README.md`
+
+## 1. O que foi construído
+
+| Área | Telas e componentes | Rotas do contrato |
+|---|---|---|
+| Autenticação | `/login` (passo TOTP para admin), sair, `/assinatura` (assinatura vencida ou bloqueada), `src/proxy.ts` só confere se o cookie existe | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/eu` |
+| Terminal | `/terminal`: lista de ativos (aberto/fechado), gráfico de velas e volume, tempos 1m–1w, zoom, EMA 9/21, Bollinger 20/2, VWAP, painéis RSI 14 e MACD 12/26/9, linha horizontal e zona de preço, alerta sonoro opcional | `GET /api/ativos`, `GET /api/candles`, WebSocket `candles:*` |
+| Análise | Painel com preço, `resumo`, tendência por tempo gráfico (texto e ícone, não só cor), resistência e suporte com distância em ATR, toques e selo "difícil de romper" (≥ 3 toques), estrutura (BOS/CHoCH), volume relativo, pressão compradora, impulso, desaceleração, lateral; no Avançado, ADX, topo/fundo e indicadores | `GET /api/analise`, WebSocket `analise:*` |
+| Sinais | Tabela com uma linha por expiração (1, 5, 15, 30 min e 1 h): COMPRA/VENDA/AGUARDAR, probabilidade calibrada com n só quando enviada, motivo do AGUARDAR, nota explicando por que tudo está em AGUARDAR. Cartão do sinal ativo: contagem regressiva da janela, "Fora da janela, não entre", invalidação, estatísticas dos últimos 30 dias da mesma expiração, aviso de entrada precisa em 1 e 5 min | `GET /api/sinais`, WebSocket `sinais:*`, `GET /api/sinais/historico` |
+| Modos | Essencial e Avançado salvos nas preferências; ícone "aprenda" (glossário com 27 termos) em cada termo técnico | `PATCH /api/eu/preferencias {modo}` |
+| Layout | Ativo, tempo gráfico, indicadores e desenhos salvos | `PATCH /api/eu/preferencias {layout}` |
+| Histórico | `/historico`: filtros por ativo, expiração e período, resumo (taxa = WIN/(WIN+LOSS), empates e "sem dado" à parte, apertados), tabela com todas as derrotas | `GET /api/sinais/historico` |
+| Perfil | `/perfil`: conta, plano, situação e vencimento, modo, resumo do histórico, troca de senha (≥ 10 caracteres) | `GET /api/eu`, `POST /api/eu/senha` |
+| Admin | `/admin/usuarios` (busca, filtro de status, criar, editar, bloquear com confirmação, desbloquear, renovar), `/admin/planos`, `/admin/assinaturas`, `/admin/acessos`, `/admin/auditoria`, `/admin/payout` (com equilíbrio p* = 1/(1+r)), `/admin/qualidade` | rotas `/api/admin/*` |
+| Aviso de risco | Faixa permanente e discreta no rodapé de todas as telas logadas e na de assinatura | — |
+
+Camada técnica:
+- `src/lib/api`: tipos espelhando o contrato, cliente HTTP com `X-CSRF-Token` (cookie `sinais_csrf`) nas mutações, `credentials: same-origin`, erros `{erro: {codigo, mensagem}}`, 401 → login, 402 → assinatura, 429 → mensagem fixa, corpo não JSON → mensagem genérica com o status.
+- `src/lib/ws`: um WebSocket por aba, multiplexado por canal, tipado (`DadosDoCanal<C>`), reassina tudo ao reconectar, backoff exponencial com jitter (0,5 s a 30 s), 4401 → login e 4402 → assinatura, sem reconexão.
+- Preços exibidos a partir da string decimal, sem `float`; horários em Brasília.
+
+## 2. Decisões tomadas (rulings)
+
+1. `src/proxy.ts` em vez de `middleware.ts`: no Next.js 16 o arquivo e a função foram renomeados.
+2. O contrato não devolve `layout` em `GET /api/eu`. O frontend grava com `PATCH` e lê `usuario.layout` se vier; senão, usa uma cópia no `localStorage`. Os desenhos não acompanham o usuário entre aparelhos até o backend devolver o layout.
+3. O `Sinal` do contrato não tem tolerância de preço nem preço de referência (design §12.6). O cartão mostra esses campos só se o backend enviar `tolerancia_preco` e `preco_referencia` (opcionais nos tipos).
+4. As estatísticas do cartão são calculadas no navegador a partir de `/api/sinais/historico` (dados reais, mesma regra do histórico).
+5. "Difícil de romper" a partir de 3 toques (o contrato não fixa o limite). O número de toques aparece sempre.
+6. Indicadores do gráfico calculados no navegador, só para exibição; a análise oficial vem do backend.
+7. Eixo do gráfico em UTC−3 fixo (o Brasil não tem horário de verão desde 2019).
+8. Desenhos salvos por ativo (valem em todos os tempos gráficos).
+9. `.npmrc` com `legacy-peer-deps=true`: o npm 10.9 do CI quebra ao resolver os peers opcionais vitest → jsdom → `@napi-rs/canvas` (`Cannot read properties of null (reading 'edgesOut')`). Todos os peers necessários estão declarados.
+10. Sem `package-lock.json`: o ambiente de desenvolvimento não tem acesso ao registro npm. O CI instala pelas faixas do `package.json`.
+
+## 3. Pontos do contrato para o backend
+
+1. Devolver `layout` em `GET /api/eu` (hoje só existe a escrita).
+2. Incluir no `Sinal` a tolerância de preço e o preço de referência da janela de entrada (design §12.6).
+3. Fixar o formato das respostas de `GET /api/admin/usuarios` (status do usuário, assinatura), `acessos`, `auditoria`, `qualidade` e `/api/publico/estatisticas`. O frontend usa campos opcionais: `UsuarioAdmin {id, email, nome, papel?, status?, assinatura?}`, `EventoAcesso {ts, evento, usuario_id?, email?, ip?, user_agent?}`, `EventoAuditoria {ts, acao, admin_id?, admin_email?, alvo?, antes?, depois?}`, `EventoQualidade {tipo, simbolo?, inicio?, fim?, detalhes?}`.
+4. Deixar `GET /api/eu` e `POST /api/eu/senha` fora da exigência de assinatura ativa, para a tela de assinatura mostrar o plano e o usuário poder trocar a senha.
+5. `PATCH /api/admin/planos` não tem id na rota: o frontend envia o plano inteiro, com `id`, no corpo.
+6. Payout em fração (0,86); o editor mostra e aceita porcentagem.
+
+## 4. Testes e CI
+
+Workflow `.github/workflows/frontend.yml` (push e pull request em `frontend/**`), três jobs em paralelo:
+
+| Job | Passos |
+|---|---|
+| Lint e tipos | `npm install`, `npm run lint` (ESLint 9 + `eslint-config-next` 16), `npm run typecheck` (`next typegen && tsc --noEmit`) |
+| Testes (Vitest) | `npm test` |
+| Build e E2E | `npm run build`, `npx playwright install --with-deps chromium`, `npm run e2e` contra `next start`, capturas de tela |
+
+Processo: os testes foram enviados antes da implementação e falharam no CI (18 de 18 arquivos, "Failed to resolve import"); depois a implementação os deixou verdes.
+
+Resultado no CI (versões resolvidas: Next 16, React 19.3.1, TypeScript 5.9.3, Tailwind 4.3.5, Lightweight Charts 5.3.0, Vitest 4.1.12, Playwright 1.65.1):
+
+- Vitest: **18 arquivos, 77 testes, todos passando** (API e CSRF, WebSocket e reconexão, proxy, indicadores com valores calculados à mão, formatação pt-BR, login com TOTP, troca de senha, modo, lista de ativos, candle ao vivo, tabela de sinais, painel de análise, cartão com janela, histórico, usuários e payout do admin).
+- Lint: 0 erros (4 avisos de `window.location.assign`, mantido de propósito para recarregar a página e limpar o estado ao perder a sessão).
+- Build: 16 rotas.
+- Playwright: login com TOTP, credenciais inválidas, terminal com 5 AGUARDAR e candle ao vivo pelo WebSocket simulado, modo Avançado salvo, 402 → assinatura, troca de tempo gráfico, admin lista usuários, cliente sem acesso ao admin, capturas de tela. Os dados das simulações ficam em `frontend/e2e/mocks.ts`, rotulados como simulação.
+
+## 5. Pendências
+
+- Revisão visual pelo cliente (critério da Fase 9).
+- Latência de ponta a ponta medida só com o backend real (critério da Fase 9).
+- Página pública de estatísticas (`/api/publico/estatisticas`) depende do formato da resposta (ponto 3 acima).
+- CSP com nonce e cabeçalhos HSTS ficam para a Fase 11 (hoje: `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`).
+- Gerar e versionar o `package-lock.json` numa máquina com rede.

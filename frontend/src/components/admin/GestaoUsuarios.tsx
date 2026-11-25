@@ -7,7 +7,7 @@ import type { Id, Plano, StatusUsuario, UsuarioAdmin } from "@/lib/api/tipos";
 import { formatarData } from "@/lib/formato";
 import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
-import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
+import { botao, campo, campoBase, painel, rotulo, tabela } from "@/components/ui/estilos";
 import { EMAIL_VALIDO, dataParaMs, msParaData } from "./util";
 
 const COR_STATUS: Record<StatusUsuario, string> = {
@@ -65,7 +65,7 @@ function FormNovoUsuario({ planos, aoCriar, aoCancelar }: { planos: Plano[]; aoC
       </div>
       <div>
         <label htmlFor="nu-senha" className={rotulo}>Senha temporária</label>
-        <input id="nu-senha" type="text" value={senha} onChange={(e) => setSenha(e.target.value)} className={`${campo} num`} autoComplete="off" />
+        <input id="nu-senha" type="text" value={senha} onChange={(e) => setSenha(e.target.value)} className={`${campoBase} num py-2 w-full`} autoComplete="off" />
       </div>
       <div>
         <label htmlFor="nu-plano" className={rotulo}>Plano</label>
@@ -119,14 +119,14 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
     <tr className={tabela.linha}>
       <td className={tabela.td}>
         {acao === "editar" ? (
-          <input aria-label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} className={`${campo} py-1`} />
+          <input aria-label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} className={`${campoBase} py-1 w-full`} />
         ) : (
           <span className="font-medium">{u.nome}</span>
         )}
       </td>
       <td className={`${tabela.td} text-suave`}>
         {acao === "editar" ? (
-          <input aria-label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${campo} py-1`} />
+          <input aria-label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${campoBase} py-1 w-full`} />
         ) : (
           u.email
         )}
@@ -182,12 +182,12 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
           )}
           {acao === "renovar" && (
             <>
-              <select aria-label="Plano" value={plano || (planos[0] ? String(planos[0].id) : "")} onChange={(e) => setPlano(e.target.value)} className={`${campo} w-32 py-1`}>
+              <select aria-label="Plano" value={plano || (planos[0] ? String(planos[0].id) : "")} onChange={(e) => setPlano(e.target.value)} className={`${campoBase} w-32 py-1`}>
                 {planos.map((p) => (
                   <option key={String(p.id)} value={String(p.id)}>{p.nome}</option>
                 ))}
               </select>
-              <input aria-label="Novo vencimento" type="date" value={fim} onChange={(e) => setFim(e.target.value)} className={`${campo} w-40 py-1`} />
+              <input aria-label="Novo vencimento" type="date" value={fim} onChange={(e) => setFim(e.target.value)} className={`${campoBase} w-40 py-1`} />
               <button
                 type="button"
                 className={botao.secundario}
@@ -240,7 +240,7 @@ export function GestaoUsuarios() {
             placeholder="Nome ou e-mail"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            className={`${campo} w-64`}
+            className={`${campoBase} w-64 py-2`}
           />
           <select
             aria-label="Status"
@@ -249,7 +249,7 @@ export function GestaoUsuarios() {
               setStatus(e.target.value);
               setConsulta({ busca: texto.trim(), status: e.target.value });
             }}
-            className={`${campo} w-36`}
+            className={`${campoBase} w-36 py-2`}
           >
             <option value="">Todos</option>
             <option value="ativo">Ativos</option>

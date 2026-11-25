@@ -119,7 +119,7 @@ export function Terminal() {
   }
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-borda lg:h-[calc(100dvh-3rem-2.6rem)] lg:grid-cols-[200px_minmax(0,1fr)_minmax(340px,400px)]">
+    <main className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-borda lg:h-[calc(100dvh-3rem-2.6rem)] lg:grid-cols-[200px_minmax(0,1fr)_minmax(340px,400px)] lg:grid-rows-[minmax(0,1fr)]">
       <aside className="bg-painel p-2 lg:overflow-y-auto" aria-label="Lista de ativos">
         <h2 className={`${tituloPainel} hidden px-2 pt-1 pb-2 lg:block`}>Ativos</h2>
         {ativosQ.carregando && ativos.length === 0 ? (

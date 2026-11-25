@@ -16,7 +16,7 @@ export function AlternadorModo() {
   const atual = usuario?.modo;
 
   return (
-    <fieldset className="relative flex items-center rounded-md border border-borda bg-fundo p-0.5" disabled={!usuario}>
+    <fieldset className="relative flex w-fit items-center rounded-md border border-borda bg-fundo p-0.5" disabled={!usuario}>
       <legend className="sr-only">Modo de exibição</legend>
       {OPCOES.map((o) => (
         <label

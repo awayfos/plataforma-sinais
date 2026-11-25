@@ -8,7 +8,7 @@ import { ROTULO_EXPIRACAO, estatisticas } from "@/lib/sinais";
 import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
-import { campo, painel, rotulo, tituloPainel } from "@/components/ui/estilos";
+import { campoBase, painel, rotulo, tituloPainel } from "@/components/ui/estilos";
 import { TabelaHistorico } from "./TabelaHistorico";
 
 const PERIODOS = [
@@ -46,7 +46,7 @@ export function Historico() {
         <form className="flex flex-wrap gap-3" onSubmit={(e) => e.preventDefault()} aria-label="Filtros do histórico">
           <div>
             <label htmlFor="f-ativo" className={rotulo}>Ativo</label>
-            <select id="f-ativo" value={simbolo} onChange={(e) => setSimbolo(e.target.value)} className={`${campo} w-36 py-1.5`}>
+            <select id="f-ativo" value={simbolo} onChange={(e) => setSimbolo(e.target.value)} className={`${campoBase} w-36 py-1.5`}>
               <option value="">Todos</option>
               {(ativos.dados ?? []).map((a) => (
                 <option key={a.simbolo} value={a.simbolo}>{a.simbolo}</option>
@@ -59,7 +59,7 @@ export function Historico() {
               id="f-expiracao"
               value={expiracao}
               onChange={(e) => setExpiracao(e.target.value as Expiracao | "")}
-              className={`${campo} w-28 py-1.5`}
+              className={`${campoBase} w-28 py-1.5`}
             >
               <option value="">Todas</option>
               {EXPIRACOES.map((x) => (
@@ -69,7 +69,7 @@ export function Historico() {
           </div>
           <div>
             <label htmlFor="f-periodo" className={rotulo}>Período</label>
-            <select id="f-periodo" value={dias} onChange={(e) => setDias(Number(e.target.value))} className={`${campo} w-36 py-1.5`}>
+            <select id="f-periodo" value={dias} onChange={(e) => setDias(Number(e.target.value))} className={`${campoBase} w-36 py-1.5`}>
               {PERIODOS.map((p) => (
                 <option key={p.dias} value={p.dias}>{p.rotulo}</option>
               ))}

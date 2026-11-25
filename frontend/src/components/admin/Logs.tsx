@@ -5,7 +5,7 @@ import { api } from "@/lib/api/endpoints";
 import { formatarDataHora } from "@/lib/formato";
 import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
-import { botao, campo, painel, tabela } from "@/components/ui/estilos";
+import { botao, campoBase, painel, tabela } from "@/components/ui/estilos";
 import { json } from "./util";
 
 function Detalhes({ valor, rotulo }: { valor: unknown; rotulo: string }) {
@@ -36,7 +36,7 @@ export function LogAcessos() {
           setUsuarioId(texto.trim());
         }}
       >
-        <input type="search" aria-label="Filtrar por ID do usuário" placeholder="ID do usuário" value={texto} onChange={(e) => setTexto(e.target.value)} className={`${campo} num w-48`} />
+        <input type="search" aria-label="Filtrar por ID do usuário" placeholder="ID do usuário" value={texto} onChange={(e) => setTexto(e.target.value)} className={`${campoBase} num w-48 py-2`} />
         <button type="submit" className={botao.secundario}>Filtrar</button>
       </form>
       <Moldura>

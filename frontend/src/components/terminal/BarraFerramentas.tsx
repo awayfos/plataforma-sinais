@@ -142,8 +142,10 @@ export function BarraFerramentas({
         onClick={() => aoMudarSom(!som)}
         className={`ml-auto ${grupo} px-2.5 py-1 text-[12px] font-medium ${som ? "text-ouro" : "text-apagado hover:text-suave"}`}
         title="Alerta sonoro quando surgir um sinal"
+        aria-label="Alerta sonoro"
       >
-        Som {som ? "ligado" : "desligado"}
+        <span className={`mr-1.5 inline-block size-1.5 rounded-full ${som ? "bg-ouro" : "bg-apagado"}`} aria-hidden="true" />
+        Som
       </button>
     </div>
   );

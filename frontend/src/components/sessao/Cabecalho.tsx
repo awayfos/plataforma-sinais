@@ -24,7 +24,8 @@ const STATUS: Record<string, { texto: string; cor: string }> = {
 export function Cabecalho() {
   const caminho = usePathname();
   const { usuario, sair } = useSessao();
-  const status = STATUS[useStatusTempoReal()]!;
+  const estado = useStatusTempoReal();
+  const status = STATUS[estado]!;
   const rotas = usuario?.papel === "admin" ? [...ROTAS, { href: "/admin/usuarios", rotulo: "Admin" }] : ROTAS;
 
   return (
@@ -55,11 +56,15 @@ export function Cabecalho() {
         })}
       </nav>
       <div className="ml-auto flex items-center gap-3">
-        <span className="hidden items-center gap-1.5 text-[11px] text-apagado md:inline-flex" role="status" aria-live="polite">
-          <span className={`size-1.5 rounded-full ${status.cor}`} aria-hidden="true" />
-          {status.texto}
-        </span>
-        <AlternadorModo />
+        {estado !== "ocioso" && (
+          <span className="hidden items-center gap-1.5 text-[11px] text-apagado md:inline-flex" role="status" aria-live="polite">
+            <span className={`size-1.5 rounded-full ${status.cor}`} aria-hidden="true" />
+            {status.texto}
+          </span>
+        )}
+        <div className="hidden sm:block">
+          <AlternadorModo />
+        </div>
         <button
           type="button"
           onClick={() => void sair()}
