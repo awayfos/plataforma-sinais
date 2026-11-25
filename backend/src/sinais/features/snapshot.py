@@ -23,6 +23,9 @@ from sinais.core.dominio import TempoGrafico, abertura_candle
 
 FEATURE_SET_VERSION = "fs-1"
 _MINUTO_MS = 60_000
+# Minutos de histórico que o cálculo ao vivo precisa para reproduzir o laboratório
+# (300 candles de 1h: aquecimento de EMA50, ADX e Ichimoku do contexto mais longo).
+JANELA_AO_VIVO_1M = 18_000
 CONTEXTOS_PADRAO = (TempoGrafico.M5, TempoGrafico.M15, TempoGrafico.H1)
 
 
@@ -71,8 +74,8 @@ def features_de(df: pd.DataFrame) -> pd.DataFrame:
         "vol_divergencia": vol.divergencia_volume(df),
         "vol_vwap_dist": _por_atr(c - vol.vwap(df), a),
         **{f"reg_{k}": v for k, v in regioes(df).items()},
-        "fib_posicao": posicao_fibonacci(df),
-        **{f"pa_{k}": v for k, v in price_action(df).items()},
+        "fib_posicao": posicao_fibonacci(df, est=e),
+        **{f"pa_{k}": v for k, v in price_action(df, est=e).items()},
     }
     return pd.DataFrame(colunas, index=df.index).astype("float64")
 
@@ -105,11 +108,18 @@ def montar_snapshot(
         prefixo = f"{tg.name.lower()}_"
         agregado = agregar_quadro(df_1m, tg)
         ctx = features_de(agregado).add_prefix(prefixo)
-        ctx[f"{prefixo}abertura_ctx"] = agregado.index.to_numpy(dtype="float64")
-        ctx["_fech"] = agregado.index.to_numpy(dtype="int64") + tg.duracao_ms
+        ctx["_fech_ctx"] = agregado.index.to_numpy(dtype="int64") + tg.duracao_ms
         alvo = pd.DataFrame({"_fech": fechamento_1m})
-        juntado = pd.merge_asof(alvo, ctx.sort_values("_fech"), on="_fech", direction="backward")
+        juntado = pd.merge_asof(
+            alvo, ctx, left_on="_fech", right_on="_fech_ctx", direction="backward"
+        )
         juntado.index = df_1m.index
-        partes.append(juntado.drop(columns="_fech"))
+        idade = (juntado["_fech"] - juntado["_fech_ctx"]) / _MINUTO_MS
+        # Contexto mais velho que a própria duração = lacuna nos dados: não usar.
+        vencido = idade >= tg.duracao_ms // _MINUTO_MS
+        juntado = juntado.drop(columns=["_fech", "_fech_ctx"])
+        juntado[vencido] = np.nan
+        juntado[f"{prefixo}idade_ctx"] = idade
+        partes.append(juntado)
     saida = pd.concat(partes, axis=1)
     return saida.astype("float64").replace([np.inf, -np.inf], np.nan)

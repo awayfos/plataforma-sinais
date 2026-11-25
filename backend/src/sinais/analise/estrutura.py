@@ -24,6 +24,7 @@ def pivos(df: pd.DataFrame, k: int = 3) -> pd.DataFrame:
 
 def estrutura(df: pd.DataFrame, k: int = 3) -> pd.DataFrame:
     p = pivos(df, k)
+    topos, fundos = p["topo"].to_numpy(), p["fundo"].to_numpy()
     c = df["c"].to_numpy(dtype="float64")
     n = len(c)
     cols = {
@@ -34,7 +35,7 @@ def estrutura(df: pd.DataFrame, k: int = 3) -> pd.DataFrame:
     topo = fundo = float("nan")
     rot_t = rot_f = 0
     for i in range(n):
-        novo_t, novo_f = p["topo"].iat[i], p["fundo"].iat[i]
+        novo_t, novo_f = topos[i], fundos[i]
         if not np.isnan(novo_t):
             rot_t = 0 if np.isnan(topo) else (1 if novo_t > topo else -1)
             topo = novo_t

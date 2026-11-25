@@ -10,7 +10,9 @@ from sinais.analise.estrutura import estrutura
 from sinais.analise.indicadores import adx, atr, bollinger, ema
 
 
-def price_action(df: pd.DataFrame, n: int = 14, k: int = 3) -> pd.DataFrame:
+def price_action(
+    df: pd.DataFrame, n: int = 14, k: int = 3, est: pd.DataFrame | None = None
+) -> pd.DataFrame:
     a = atr(df, n)
     a = a.where(a > 0)
     media = ema(df["c"], 20)
@@ -22,7 +24,7 @@ def price_action(df: pd.DataFrame, n: int = 14, k: int = 3) -> pd.DataFrame:
     amp = (df["h"] - df["l"]).where(lambda x: x > 0)
     sup = df["h"] - df[["o", "c"]].max(axis=1)
     inf = df[["o", "c"]].min(axis=1) - df["l"]
-    e = estrutura(df, k)
+    e = estrutura(df, k) if est is None else est
     correcao = pd.Series(np.nan, index=df.index)
     correcao[e["tendencia"] == 1] = (e["ultimo_topo"] - df["c"]) / a
     correcao[e["tendencia"] == -1] = (df["c"] - e["ultimo_fundo"]) / a

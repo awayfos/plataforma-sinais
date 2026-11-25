@@ -22,8 +22,8 @@ def niveis_fibonacci(topo: float, fundo: float) -> dict[str, float]:
     return {nome: topo - (topo - fundo) * p for nome, p in PROPORCOES.items()}
 
 
-def posicao_fibonacci(df: pd.DataFrame, k: int = 3) -> pd.Series:
+def posicao_fibonacci(df: pd.DataFrame, k: int = 3, est: pd.DataFrame | None = None) -> pd.Series:
     """0 = no último fundo confirmado, 1 = no último topo confirmado (pode passar dos limites)."""
-    e = estrutura(df, k)
+    e = estrutura(df, k) if est is None else est
     faixa = e["ultimo_topo"] - e["ultimo_fundo"]
     return (df["c"] - e["ultimo_fundo"]) / faixa.where(faixa != 0)
