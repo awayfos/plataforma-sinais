@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api/endpoints";
 import type { Analise, Candle, Desenho, IndicadoresGrafico, Sinal, TempoGrafico } from "@/lib/api/tipos";
 import { mesclarCandle } from "@/lib/candles";
-import { usarDados } from "@/lib/usarDados";
-import { usarCanal } from "@/lib/ws/ProvedorTempoReal";
+import { useDados } from "@/lib/useDados";
+import { useCanal } from "@/lib/ws/ProvedorTempoReal";
 import { useSessao } from "@/components/sessao/ProvedorSessao";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { tituloPainel } from "@/components/ui/estilos";
@@ -30,7 +30,7 @@ export function Terminal() {
   const { usuario, layout, salvarLayout } = useSessao();
   const avancado = usuario?.modo === "avancado";
 
-  const ativosQ = usarDados("ativos", (s) => api.ativos(s));
+  const ativosQ = useDados("ativos", (s) => api.ativos(s));
   const ativos = useMemo(() => ativosQ.dados ?? [], [ativosQ.dados]);
 
   const [simboloEscolhido, setSimboloEscolhido] = useState<string | null>(null);
@@ -58,9 +58,9 @@ export function Terminal() {
 
   // Candles: histórico por REST + candle em formação pelo WebSocket.
   const chaveSerie = simbolo ? `${simbolo}:${tempo}` : null;
-  const candlesQ = usarDados(chaveSerie, (s) => api.candles({ simbolo: simbolo!, tg: tempo, limite: LIMITE_CANDLES }, s));
+  const candlesQ = useDados(chaveSerie, (s) => api.candles({ simbolo: simbolo!, tg: tempo, limite: LIMITE_CANDLES }, s));
   const [aoVivo, setAoVivo] = useState<{ chave: string | null; lista: Candle[] }>({ chave: null, lista: [] });
-  usarCanal(simbolo ? (`candles:${simbolo}:${tempo}` as const) : null, (c) => {
+  useCanal(simbolo ? (`candles:${simbolo}:${tempo}` as const) : null, (c) => {
     const candle: Candle = { t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v };
     setAoVivo((prev) => ({
       chave: chaveSerie,
@@ -74,14 +74,14 @@ export function Terminal() {
   }, [candlesQ.dados, aoVivo, chaveSerie]);
 
   // Análise e sinais: REST no início, WebSocket depois.
-  const analiseQ = usarDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s));
+  const analiseQ = useDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s));
   const [analiseVivo, setAnaliseVivo] = useState<Analise | null>(null);
-  usarCanal(simbolo && aberto ? (`analise:${simbolo}` as const) : null, setAnaliseVivo);
+  useCanal(simbolo && aberto ? (`analise:${simbolo}` as const) : null, setAnaliseVivo);
   const analise = maisRecente(analiseQ.dados, analiseVivo?.simbolo === simbolo ? analiseVivo : null);
 
-  const sinaisQ = usarDados(simbolo && aberto ? `sinais:${simbolo}` : null, (s) => api.sinais(simbolo!, s));
+  const sinaisQ = useDados(simbolo && aberto ? `sinais:${simbolo}` : null, (s) => api.sinais(simbolo!, s));
   const [sinaisVivo, setSinaisVivo] = useState<{ simbolo: string; lista: Sinal[] } | null>(null);
-  usarCanal(simbolo && aberto ? (`sinais:${simbolo}` as const) : null, (lista) => {
+  useCanal(simbolo && aberto ? (`sinais:${simbolo}` as const) : null, (lista) => {
     if (simbolo) setSinaisVivo({ simbolo, lista });
   });
   const sinais = sinaisVivo?.simbolo === simbolo ? sinaisVivo.lista : (sinaisQ.dados ?? null);

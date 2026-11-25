@@ -6,18 +6,17 @@ import { AlternadorModo } from "@/components/sessao/AlternadorModo";
 import { Carregando, ErroEstado } from "@/components/ui/Estado";
 import { painel, tituloPainel } from "@/components/ui/estilos";
 import { api } from "@/lib/api/endpoints";
-import { diasAte, formatarData, formatarPercentual } from "@/lib/formato";
+import { diasAte, formatarData, formatarPercentual, periodoAteAgora } from "@/lib/formato";
 import { estatisticas } from "@/lib/sinais";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { FormSenha } from "./FormSenha";
 
 const COR_STATUS = { ativa: "text-alta", vencida: "text-alerta", bloqueada: "text-baixa" } as const;
 
 function ResumoHistorico() {
-  const { dados, erro, carregando, recarregar } = usarDados("historico-30d", (sinal) => {
-    const fim = Date.now();
-    return api.historico({ inicio: fim - 30 * 86_400_000, fim }, sinal);
-  });
+  const { dados, erro, carregando, recarregar } = useDados("historico-30d", (sinal) =>
+    api.historico(periodoAteAgora(30), sinal),
+  );
   if (carregando) return <Carregando linhas={2} />;
   if (erro) return <ErroEstado mensagem={erro.message} aoTentarDeNovo={recarregar} />;
   const s = estatisticas(dados ?? []);

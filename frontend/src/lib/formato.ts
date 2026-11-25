@@ -85,3 +85,9 @@ export function formatarDuracao(ms: number): string {
 export function diasAte(ms: number, agora = Date.now()): number {
   return Math.ceil((ms - agora) / 86_400_000);
 }
+
+/** Intervalo [agora − dias, agora] em ms. Fora dos componentes: Date.now é impuro. */
+export function periodoAteAgora(dias: number): { inicio: number; fim: number } {
+  const fim = Date.now();
+  return { inicio: fim - dias * 86_400_000, fim };
+}

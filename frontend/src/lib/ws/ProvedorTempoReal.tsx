@@ -37,7 +37,7 @@ export function useStatusTempoReal(): StatusConexao {
 }
 
 /** Assina um canal enquanto o componente estiver montado (null = nenhum). */
-export function usarCanal<C extends Canal>(canal: C | null, ouvinte: (dados: DadosDoCanal<C>) => void): void {
+export function useCanal<C extends Canal>(canal: C | null, ouvinte: (dados: DadosDoCanal<C>) => void): void {
   const { cliente } = useContext(Contexto);
   const ref = useRef(ouvinte);
   useEffect(() => {

@@ -6,7 +6,7 @@ import { api } from "@/lib/api/endpoints";
 import { EXPIRACOES, type Expiracao, type PayoutExnova } from "@/lib/api/tipos";
 import { formatarPercentual } from "@/lib/formato";
 import { ROTULO_EXPIRACAO } from "@/lib/sinais";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
 import { Carregando, ErroEstado } from "@/components/ui/Estado";
 import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
@@ -20,7 +20,7 @@ function valido(texto: string): number | null {
 }
 
 export function EditorPayout() {
-  const dados = usarDados("payout", (s) => api.admin.payout(s));
+  const dados = useDados("payout", (s) => api.admin.payout(s));
   const [edicoes, setEdicoes] = useState<Record<string, string>>({});
   const [extras, setExtras] = useState<PayoutExnova[]>([]);
   const [novoSimbolo, setNovoSimbolo] = useState("BTCUSDT");

@@ -14,7 +14,7 @@ interface Estado<T> {
  * Busca dados para uma chave (null = não buscar). Sem setState síncrono no efeito:
  * "carregando" é derivado de a resposta guardada ser de outra chave/versão.
  */
-export function usarDados<T>(chave: string | null, carregar: (sinal: AbortSignal) => Promise<T>) {
+export function useDados<T>(chave: string | null, carregar: (sinal: AbortSignal) => Promise<T>) {
   const [estado, setEstado] = useState<Estado<T>>({ chave: null, versao: -1 });
   const [versao, setVersao] = useState(0);
   const carregarRef = useRef(carregar);

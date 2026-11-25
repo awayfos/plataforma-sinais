@@ -6,7 +6,7 @@ import { api } from "@/lib/api/endpoints";
 import { EXPIRACOES, type Plano } from "@/lib/api/tipos";
 import { formatarMoeda } from "@/lib/formato";
 import { ROTULO_EXPIRACAO } from "@/lib/sinais";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
 
@@ -110,8 +110,8 @@ function FormPlano({ inicial, simbolos, aoSalvar, aoCancelar }: { inicial: Rascu
 }
 
 export function GestaoPlanos() {
-  const planos = usarDados("planos", (s) => api.admin.planos(s));
-  const ativos = usarDados("ativos", (s) => api.ativos(s));
+  const planos = useDados("planos", (s) => api.admin.planos(s));
+  const ativos = useDados("ativos", (s) => api.ativos(s));
   const [editando, setEditando] = useState<Rascunho | null>(null);
   const simbolos = (ativos.dados ?? []).map((a) => a.simbolo);
 

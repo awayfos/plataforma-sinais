@@ -2,20 +2,19 @@
 
 import { api } from "@/lib/api/endpoints";
 import type { Sinal } from "@/lib/api/tipos";
-import { formatarDuracao, formatarHora, formatarPercentual, formatarPreco } from "@/lib/formato";
+import { formatarDuracao, formatarHora, formatarPercentual, formatarPreco, periodoAteAgora } from "@/lib/formato";
 import { EXPIRACOES_CURTAS, ROTULO_EXPIRACAO, estadoJanela, estatisticas } from "@/lib/sinais";
-import { usarAgora } from "@/lib/usarAgora";
-import { usarDados } from "@/lib/usarDados";
+import { useAgora } from "@/lib/useAgora";
+import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
 import { SeloDirecao } from "./Direcao";
 
 const DIAS_HISTORICO = 30;
 
 function HistoricoDoSinal({ simbolo, sinal }: { simbolo: string; sinal: Sinal }) {
-  const { dados, erro, carregando } = usarDados(`${simbolo}:${sinal.expiracao}`, (s) => {
-    const fim = Date.now();
-    return api.historico({ simbolo, inicio: fim - DIAS_HISTORICO * 86_400_000, fim }, s);
-  });
+  const { dados, erro, carregando } = useDados(`${simbolo}:${sinal.expiracao}`, (s) =>
+    api.historico({ simbolo, ...periodoAteAgora(DIAS_HISTORICO) }, s),
+  );
   let conteudo: React.ReactNode;
   if (carregando) conteudo = <span className="text-apagado">Carregando…</span>;
   else if (erro) conteudo = <span className="text-apagado">Histórico indisponível agora.</span>;
@@ -46,7 +45,7 @@ function HistoricoDoSinal({ simbolo, sinal }: { simbolo: string; sinal: Sinal })
 }
 
 export function CartaoSinal({ sinal, simbolo }: { sinal: Sinal; simbolo: string }) {
-  const agora = usarAgora(250, sinal.janela_ate !== null);
+  const agora = useAgora(250, sinal.janela_ate !== null);
   const janela = estadoJanela(sinal.janela_ate, agora);
   const curta = EXPIRACOES_CURTAS.includes(sinal.expiracao);
   const compra = sinal.direcao === "COMPRA";

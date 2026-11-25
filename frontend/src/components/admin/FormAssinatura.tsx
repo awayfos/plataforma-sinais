@@ -3,14 +3,14 @@
 import { useState, type FormEvent } from "react";
 import { ErroApi } from "@/lib/api/cliente";
 import { api } from "@/lib/api/endpoints";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { ErroEstado } from "@/components/ui/Estado";
 import { botao, campo, painel, rotulo } from "@/components/ui/estilos";
 import { dataParaMs, msParaData } from "./util";
 
 export function FormAssinatura() {
-  const usuarios = usarDados("usuarios-todos", (s) => api.admin.usuarios({}, s));
-  const planos = usarDados("planos", (s) => api.admin.planos(s));
+  const usuarios = useDados("usuarios-todos", (s) => api.admin.usuarios({}, s));
+  const planos = useDados("planos", (s) => api.admin.planos(s));
   const [usuario, setUsuario] = useState("");
   const [plano, setPlano] = useState("");
   const [inicio, setInicio] = useState(() => msParaData(Date.now()));

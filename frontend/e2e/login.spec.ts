@@ -51,5 +51,6 @@ test("credenciais inválidas mostram a mensagem do servidor", async ({ page }) =
   await page.getByLabel("E-mail").fill("x@teste.local");
   await page.getByLabel("Senha").fill("errada-123456");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("alert")).toHaveText("E-mail ou senha incorretos.");
+  // O Next também tem um anunciador de rota com role="alert"; filtra pelo texto.
+  await expect(page.getByRole("alert").filter({ hasText: "E-mail ou senha incorretos." })).toBeVisible();
 });

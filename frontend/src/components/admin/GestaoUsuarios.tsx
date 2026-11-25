@@ -5,7 +5,7 @@ import { ErroApi } from "@/lib/api/cliente";
 import { api } from "@/lib/api/endpoints";
 import type { Id, Plano, StatusUsuario, UsuarioAdmin } from "@/lib/api/tipos";
 import { formatarData } from "@/lib/formato";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { botao, campo, painel, rotulo, tabela } from "@/components/ui/estilos";
 import { EMAIL_VALIDO, dataParaMs, msParaData } from "./util";
@@ -218,10 +218,10 @@ export function GestaoUsuarios() {
   const [consulta, setConsulta] = useState({ busca: "", status: "" });
   const [criando, setCriando] = useState(false);
 
-  const usuarios = usarDados(`usuarios:${consulta.busca}:${consulta.status}`, (s) =>
+  const usuarios = useDados(`usuarios:${consulta.busca}:${consulta.status}`, (s) =>
     api.admin.usuarios({ busca: consulta.busca || undefined, status: consulta.status || undefined }, s),
   );
-  const planos = usarDados("planos", (s) => api.admin.planos(s));
+  const planos = useDados("planos", (s) => api.admin.planos(s));
 
   return (
     <div className="space-y-4">

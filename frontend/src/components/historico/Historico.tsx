@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { api } from "@/lib/api/endpoints";
 import { EXPIRACOES, type Expiracao } from "@/lib/api/tipos";
-import { formatarPercentual } from "@/lib/formato";
+import { formatarPercentual, periodoAteAgora } from "@/lib/formato";
 import { ROTULO_EXPIRACAO, estatisticas } from "@/lib/sinais";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { campo, painel, rotulo, tituloPainel } from "@/components/ui/estilos";
@@ -23,11 +23,10 @@ export function Historico() {
   const [dias, setDias] = useState(30);
   const [expiracao, setExpiracao] = useState<Expiracao | "">("");
 
-  const ativos = usarDados("ativos", (s) => api.ativos(s));
-  const historico = usarDados(`historico:${simbolo}:${dias}`, (s) => {
-    const fim = Date.now();
-    return api.historico({ simbolo: simbolo || undefined, inicio: fim - dias * 86_400_000, fim }, s);
-  });
+  const ativos = useDados("ativos", (s) => api.ativos(s));
+  const historico = useDados(`historico:${simbolo}:${dias}`, (s) =>
+    api.historico({ simbolo: simbolo || undefined, ...periodoAteAgora(dias) }, s),
+  );
 
   const itens = (historico.dados ?? [])
     .filter((h) => !expiracao || h.expiracao === expiracao)

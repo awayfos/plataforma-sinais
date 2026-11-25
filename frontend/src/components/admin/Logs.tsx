@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api/endpoints";
 import { formatarDataHora } from "@/lib/formato";
-import { usarDados } from "@/lib/usarDados";
+import { useDados } from "@/lib/useDados";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { botao, campo, painel, tabela } from "@/components/ui/estilos";
 import { json } from "./util";
@@ -25,7 +25,7 @@ function Moldura({ children }: { children: React.ReactNode }) {
 export function LogAcessos() {
   const [texto, setTexto] = useState("");
   const [usuarioId, setUsuarioId] = useState("");
-  const q = usarDados(`acessos:${usuarioId}`, (s) => api.admin.acessos({ usuario_id: usuarioId || undefined }, s));
+  const q = useDados(`acessos:${usuarioId}`, (s) => api.admin.acessos({ usuario_id: usuarioId || undefined }, s));
   return (
     <div className="space-y-4">
       <form
@@ -77,7 +77,7 @@ export function LogAcessos() {
 }
 
 export function LogAuditoria() {
-  const q = usarDados("auditoria", (s) => api.admin.auditoria(s));
+  const q = useDados("auditoria", (s) => api.admin.auditoria(s));
   return (
     <Moldura>
       {q.erro ? (
@@ -118,7 +118,7 @@ export function LogAuditoria() {
 }
 
 export function EventosQualidade() {
-  const q = usarDados("qualidade", (s) => api.admin.qualidade(s));
+  const q = useDados("qualidade", (s) => api.admin.qualidade(s));
   return (
     <div className="space-y-3">
       <p className="max-w-3xl text-xs leading-relaxed text-apagado">
