@@ -1,6 +1,6 @@
 # Fase 4 — Motores de análise
 
-- **Status:** concluída na branch `fase-04-motores-analise`
+- **Status:** concluída e incorporada à `main` (revisão final feita, 6 pontos importantes corrigidos)
 - **Plano:** `docs/superpowers/plans/2026-11-25-fase-04-motores-analise.md`
 
 ## 1. Objetivo
@@ -28,4 +28,4 @@ Criar uma biblioteca única e causal de análise técnica e o snapshot de featur
 ## 4. Auditoria
 
 - Todos os dados de teste são sintéticos (passeio aleatório com semente fixa) e marcados como tal.
-- Desempenho: o snapshot de 3.000 minutos leva menos de 1 s. Para 2 anos de 1m (~1 milhão de linhas), as partes em laço Python (estrutura, regiões, médias semeadas) devem ser medidas na Fase 5 e, se preciso, vetorizadas.
+- Desempenho: o snapshot de 3.000 minutos leva menos de 1 s. Depois da revisão: 30 mil minutos em 2,0 s (antes 6,4 s); 2 anos de 1m estimados em cerca de 70 s por ativo. O cálculo ao vivo usa os últimos 18.000 minutos (`JANELA_AO_VIVO_1M`), e um teste garante que o resultado bate com o histórico completo.
