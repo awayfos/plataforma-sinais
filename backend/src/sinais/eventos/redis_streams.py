@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from redis.asyncio import Redis
+from redis.typing import EncodableT, FieldT
 
 
 class PublicadorRedis:
@@ -13,4 +14,5 @@ class PublicadorRedis:
         self._maxlen = maxlen
 
     async def publicar(self, stream: str, campos: Mapping[str, str]) -> None:
-        await self._redis.xadd(stream, dict(campos), maxlen=self._maxlen, approximate=True)
+        dados: dict[FieldT, EncodableT] = dict(campos)
+        await self._redis.xadd(stream, dados, maxlen=self._maxlen, approximate=True)
