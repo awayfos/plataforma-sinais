@@ -28,3 +28,14 @@ def test_lacuna_none() -> None:
     df = quadro([10.0, 11, 12, 13]).drop(T0 + 2 * M)
     s = SeriePrecos.de_quadro(df, M)
     assert s.preco_em(T0 + 5 * M) is None
+
+
+def test_precos_em_vetorizado_igual_ao_escalar() -> None:
+    import numpy as np
+
+    df = quadro([10.0, 11, 12, 13]).drop(T0 + 2 * M)
+    s = SeriePrecos.de_quadro(df, M)
+    ts = np.array([T0 + i * M for i in range(7)] + [T0 + 30_000])
+    esperado = [s.preco_em(int(t)) for t in ts]
+    obtido = s.precos_em(ts)
+    assert [None if np.isnan(x) else x for x in obtido] == esperado
