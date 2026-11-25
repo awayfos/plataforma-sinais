@@ -16,8 +16,8 @@ dependencies = [
     "scipy>=1.13,<2",
     "scikit-learn>=1.6,<2",
     "joblib>=1.4,<2",
-    # API (ADR-03). FastAPI é 0.x: a versão exata é fixada com == após a resolução no CI.
-    "fastapi>=0.115,<0.200",
+    # API (ADR-03). FastAPI é 0.x: versão exata fixada com == (resolvida no CI em 2026-11-25).
+    "fastapi==0.165.0",
     "uvicorn[standard]>=0.32,<1",
     # Contas (ADR-12): Argon2id, TOTP e cifra do segredo TOTP.
     "argon2-cffi>=23.1,<26",

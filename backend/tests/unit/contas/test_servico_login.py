@@ -189,10 +189,11 @@ def test_limite_de_sessoes_configuravel() -> None:
     async def caso() -> None:
         amb = ambiente(ParametrosContas(sessoes_simultaneas=2))
         await cliente(amb)
-        tokens = [
-            (await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "ip", "ua")).token
-            for _ in range(3)
-        ]
+        tokens = []
+        for _ in range(3):
+            r = await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "ip", "ua")
+            tokens.append(r.token)
+            amb.relogio.avancar(1)  # sessões criadas em instantes distintos: a mais antiga sai
         with pytest.raises(ErroConta):
             await amb.servico.autenticar(tokens[0])
         for t in tokens[1:]:
