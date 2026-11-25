@@ -15,8 +15,10 @@ from pathlib import Path
 import pandas as pd
 
 from sinais.backtest.metricas import Metricas, benjamini_hochberg, calcular
+from sinais.backtest.precos import SeriePrecos
+from sinais.backtest.simulador import simular
 from sinais.core.dominio import Expiracao
-from sinais.corretoras.regras import ponto_equilibrio
+from sinais.corretoras.regras import RegraVencimento, ponto_equilibrio
 from sinais.modelos.avaliacao import ResultadoCombinacao
 
 N_MINIMO = 300
@@ -101,6 +103,18 @@ def consolidar(
     return linhas
 
 
+def validar_com_1s(
+    sinais: pd.DataFrame, precos_1s: SeriePrecos, regra: RegraVencimento, payout: float
+) -> tuple[Metricas, bool]:
+    """Re-simula os sinais do holdout com preços de 1 s e entrada sorteada na janela de compra
+    (como um usuário real). Confirma só com 100+ operações e Wilson inferior acima do
+    equilíbrio."""
+    ops = simular(sinais, precos_1s, regra, entrada_aleatoria=True, semente=7)
+    m = calcular(ops, payout)
+    ok = m.wins + m.losses >= N_MINIMO_HOLDOUT and m.wilson_inf > m.p_equilibrio
+    return m, bool(ok)
+
+
 def _pct(x: float) -> str:
     return "—" if math.isnan(x) else f"{100 * x:.2f}%"
 
@@ -172,11 +186,48 @@ async def _principal(meses: int, payout: float, saida: Path) -> None:  # pragma:
         "decisão": "COMPRA se p ≥ equilíbrio + 1 p.p.; VENDA se p ≤ 1 − (equilíbrio + 1 p.p.)",
         "payout": f"{payout} (hipotético até o cliente informar o da Exnova)",
         "preço": "1m (entrada na abertura do minuto da decisão): limite superior otimista "
-        "para 1m e 5m",
+        "para 1m e 5m; combinações aprovadas são revalidadas com 1 s no holdout",
     }
     linhas = consolidar(resultados, payout)
+    validacoes: list[str] = []
+    aprovadas = [x for x in linhas if x.recomendacao == "ligar"]
+    if aprovadas:
+        from sinais.corretoras.regras import EXNOVA
+
+        async with httpx.AsyncClient() as http:
+            for x in aprovadas:
+                exp = next(e for e in Expiracao if f"{int(e) // 60}m" == x.expiracao)
+                df_1s, _ = await baixar_meses(http, x.ativo, "1s", periodo[-3:])
+                m1s, ok = validar_com_1s(
+                    resultados[(x.ativo, exp)].sinais_holdout,
+                    SeriePrecos.de_quadro(df_1s, 1000),
+                    EXNOVA.regras[exp],
+                    payout,
+                )
+                del df_1s
+                validacoes.append(
+                    f"| {x.ativo} | {x.expiracao} | {m1s.wins + m1s.losses} | {_pct(m1s.taxa)} "
+                    f"| {_pct(m1s.wilson_inf)} | {_pct(m1s.p_equilibrio)} | {m1s.apertados} "
+                    f"| {_pct(m1s.taxa_sem_apertados)} "
+                    f"| **{'confirmada' if ok else 'reprovada'}** |"
+                )
     saida.mkdir(parents=True, exist_ok=True)
     texto = gerar_markdown_decisao(linhas, hipoteses)
+    if validacoes:
+        texto += "\n".join(
+            [
+                "## Validação realista do holdout com preços de 1 s",
+                "",
+                "Entrada sorteada entre decisão + 2 s e o prazo de compra; vencimento no "
+                "fechamento do segundo. Só combinações confirmadas aqui seguem para a Fase 7.",
+                "",
+                "| Ativo | Exp. | Operações | Taxa | Wilson inf. | Equilíbrio | Apertados "
+                "| Taxa s/ apertados | Resultado |",
+                "|---|---|---|---|---|---|---|---|---|",
+                *validacoes,
+                "",
+            ]
+        )
     (saida / "decisao.md").write_text(texto, encoding="utf-8")
     print(texto)
 
