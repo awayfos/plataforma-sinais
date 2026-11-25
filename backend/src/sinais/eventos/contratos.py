@@ -8,6 +8,7 @@ from typing import Protocol
 from sinais.dados.modelos import Candle
 
 STREAM_CANDLE_FECHADO = "candle.fechado"
+STREAM_ANALISE_ATUALIZADA = "analise.atualizada"
 VERSAO = "1"
 
 
@@ -29,4 +30,15 @@ def evento_candle_fechado(c: Candle) -> dict[str, str]:
         "c": str(c.fechamento),
         "v": str(c.volume),
         "fonte": c.fonte,
+    }
+
+
+def evento_analise_atualizada(simbolo: str, t: int, analise_json: str) -> dict[str, str]:
+    """``analise`` leva a ``Analise`` do contrato da API serializada em JSON."""
+    return {
+        "versao": VERSAO,
+        "id": f"{simbolo}:{t}",
+        "simbolo": simbolo,
+        "t": str(t),
+        "analise": analise_json,
     }

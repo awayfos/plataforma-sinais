@@ -51,3 +51,17 @@ def test_publicador_memoria_guarda_por_stream() -> None:
     p = PublicadorMemoria()
     asyncio.run(p.publicar(STREAM_CANDLE_FECHADO, {"a": "1"}))
     assert p.publicados == [(STREAM_CANDLE_FECHADO, {"a": "1"})]
+
+
+def test_evento_analise_atualizada() -> None:
+    from sinais.eventos.contratos import STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada
+
+    ev = evento_analise_atualizada("BTCUSDT", T0, '{"t": 1}')
+    assert STREAM_ANALISE_ATUALIZADA == "analise.atualizada"
+    assert ev == {
+        "versao": "1",
+        "id": f"BTCUSDT:{T0}",
+        "simbolo": "BTCUSDT",
+        "t": str(T0),
+        "analise": '{"t": 1}',
+    }
