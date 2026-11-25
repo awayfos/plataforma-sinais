@@ -1,6 +1,6 @@
 from sinais.dados.qualidade import Lacuna, verificar_sequencia
 
-from .fabrica import M, T0, c1m
+from .fabrica import T0, M, c1m
 
 
 def test_sequencia_ok() -> None:

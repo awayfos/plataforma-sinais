@@ -1,10 +1,10 @@
 from decimal import Decimal
 
 from sinais.core.dominio import TempoGrafico
-from sinais.dados.modelos import Candle
 from sinais.dados.agregacao import AgregadorIncremental, agregar
+from sinais.dados.modelos import Candle
 
-from .fabrica import M, T0, c1m
+from .fabrica import T0, M, c1m
 
 
 def bloco5() -> list[Candle]:
@@ -22,7 +22,11 @@ def test_agrega_5m_completo() -> None:
     assert c.abertura == T0
     assert c.intervalo_ms == 5 * M
     assert (c.abertura_preco, c.maxima, c.minima, c.fechamento) == (
-        Decimal("100"), Decimal("103"), Decimal("96.5"), Decimal("99.75"))
+        Decimal("100"),
+        Decimal("103"),
+        Decimal("96.5"),
+        Decimal("99.75"),
+    )
     assert c.volume == Decimal("15")
     assert c.negocios == 5
     assert c.fonte == "agregado"

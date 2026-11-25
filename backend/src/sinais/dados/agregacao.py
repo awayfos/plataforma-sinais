@@ -46,9 +46,7 @@ def agregar(candles_1m: Sequence[Candle], tg: TempoGrafico) -> list[Candle]:
         if c.intervalo_ms != _MINUTO_MS:
             raise ValueError("agregar espera candles de 1 min")
         blocos.setdefault(abertura_candle(c.abertura, tg), []).append(c)
-    return [
-        _combinar(b, tg, ab) for ab, b in sorted(blocos.items()) if _completo(b, tg, ab)
-    ]
+    return [_combinar(b, tg, ab) for ab, b in sorted(blocos.items()) if _completo(b, tg, ab)]
 
 
 class AgregadorIncremental:
