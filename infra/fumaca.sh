@@ -6,9 +6,10 @@ cd "$(dirname "$0")/.."
 COMPOSE="docker compose -f infra/docker-compose.yml --env-file ${ENV_FILE:-.env.example}"
 $COMPOSE up -d --build
 trap '$COMPOSE logs --tail=50 coletor; $COMPOSE down -v' EXIT
-for i in $(seq 1 90); do
-  n=$($COMPOSE exec -T db psql -U sinais -d sinais -tAc "SELECT count(*) FROM candles_1m" 2>/dev/null || echo 0)
-  if [ "${n:-0}" -gt 0 ] && [ "$i" -gt 70 ]; then break; fi
+# Espera até 5 min pelos primeiros eventos ao vivo (o histórico é baixado antes).
+for i in $(seq 1 300); do
+  ev=$($COMPOSE exec -T redis redis-cli XLEN candle.fechado 2>/dev/null || echo 0)
+  if [ "${ev:-0}" -gt 5 ]; then break; fi
   sleep 1
 done
 m1=$($COMPOSE exec -T db psql -U sinais -d sinais -tAc "SELECT count(*) FROM candles_1m")
