@@ -4,16 +4,16 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 
 ## Estado atual
 
-- **Fase atual:** 1 — Planejamento e arquitetura
-- **Status:** design escrito, aguardando aprovação do cliente
-- **Próximo passo:** aprovação do design → plano de implementação da Fase 2
+- **Fase atual:** 2 — Estrutura inicial
+- **Status:** implementada na branch `fase-02-estrutura-inicial`, aguardando aprovação do cliente
+- **Próximo passo:** aprovação da Fase 2 → plano da Fase 3 (dados de mercado da Binance)
 
 ## Fases
 
 | Fase | Nome | Status | Aprovada em |
 |---|---|---|---|
-| 1 | Planejamento e arquitetura | Em revisão | — |
-| 2 | Estrutura inicial | Não iniciada | — |
+| 1 | Planejamento e arquitetura | Aprovada | 2026-11-25 |
+| 2 | Estrutura inicial | Em revisão (`docs/fases/fase-02.md`) | — |
 | 3 | Dados de mercado | Não iniciada | — |
 | 4 | Motores de análise | Não iniciada | — |
 | 5 | Backtesting e validação | Não iniciada | — |
@@ -35,13 +35,17 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 | 2026-11-25 | Exnova como primeira corretora; Binance e provedores externos como referência | Cliente | Design §5 |
 | 2026-11-25 | Liquidação automática, sem input do usuário | Cliente | Design §12 |
 | 2026-11-25 | Nove melhorias aceitas (validação primeiro, baselines, teste ao vivo, código único, desligamento automático, detectores por evidência, gestão de risco, parte legal, monólito) | Cliente | Design §5 |
-| 2026-11-25 | Pilha técnica e ADR-01 a ADR-15 | Arquiteto (a aprovar) | Design §7.2 |
+| 2026-11-25 | Pilha técnica e ADR-01 a ADR-15 | Cliente aprovou o design | `docs/adr/` |
 
 ## Documentos
 
 - Design da Fase 1: `docs/superpowers/specs/2026-11-25-plataforma-sinais-design.md`
+- Plano da Fase 2: `docs/superpowers/plans/2026-11-25-fase-02-estrutura-inicial.md`
+- Registro da Fase 2: `docs/fases/fase-02.md`
 
 ## Pendências
+
+- Rede para instalar pacotes: liberar para rodar ruff, gerar `uv.lock` e subir o Docker Compose.
 
 - Parecer jurídico sobre CVM e defesa do consumidor (portão da Fase 11).
 - Payout e regra de empate de cada ativo na Exnova (cadastro no admin).
