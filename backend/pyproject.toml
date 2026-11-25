@@ -5,6 +5,12 @@ description = "Plataforma de inteligência de mercado e sinais validados para op
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "pydantic>=2.13,<3",
+    "httpx>=0.28,<1",
+    "websockets>=15,<17",
+    "sqlalchemy[asyncio]>=2.0.40,<3",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.15,<2",
+    "redis>=6,<8",
 ]
 
 [dependency-groups]
@@ -27,12 +33,17 @@ packages = ["src/sinais"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["integracao: precisa de PostgreSQL/TimescaleDB e Redis reais (roda no CI)"]
 
 [tool.mypy]
 strict = true
 python_version = "3.13"
 files = ["src", "tests"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
