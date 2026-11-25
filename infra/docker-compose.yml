@@ -1,0 +1,50 @@
+name: plataforma-sinais
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no .env}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - dados_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    environment:
+      SINAIS_AMBIENTE: ${SINAIS_AMBIENTE:-dev}
+      SINAIS_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SINAIS_REDIS_URL: redis://redis:6379/0
+      SINAIS_NIVEL_LOG: ${SINAIS_NIVEL_LOG:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Até existir um processo real (Fase 3), só confirma que a configuração e o pacote carregam.
+    command: ["python", "-c", "import sinais; from sinais.core.config import carregar_configuracao; carregar_configuracao(); print('sinais', sinais.__version__, 'ok')"]
+
+volumes:
+  dados_db:
