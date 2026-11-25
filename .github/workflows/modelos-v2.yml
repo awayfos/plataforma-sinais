@@ -1,0 +1,44 @@
+name: Modelos v2
+
+# Fase 6b: treina e avalia o modelo v2 (fs-2 + filtro de apertados) com rótulos e simulação em
+# preços de 1 s, em walk-forward sobre o histórico oficial da Binance, e publica o relatório de
+# decisão. Disparo manual.
+on:
+  workflow_dispatch:
+    inputs:
+      argumentos:
+        description: "Argumentos de sinais.modelos.decisao_v2"
+        default: "--meses 24 --fim 2026-10 --payout 0.86"
+  # TEMPORÁRIO: roda a partir do ramo da Fase 6b (workflow_dispatch só vale para a main).
+  push:
+    branches: [fase-06b-modelo-v2]
+    paths: [.github/workflows/modelos-v2.yml]
+
+env:
+  # Usado só no gatilho temporário de push. Rodada de fumaça: meses só de treino da rodada real.
+  ARGUMENTOS_PUSH: "--meses 3 --fim 2025-01 --treino-meses 1 --holdout-meses 0 --payout 0.86"
+
+jobs:
+  modelos-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - name: Avaliação v2
+        run: |
+          mkdir -p relatorio
+          /usr/bin/time -v uv run python -m sinais.modelos.decisao_v2 \
+            ${{ inputs.argumentos || env.ARGUMENTOS_PUSH }} --saida relatorio \
+            2>&1 | tee relatorio/execucao.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: relatorio-modelos-v2
+          path: backend/relatorio/
