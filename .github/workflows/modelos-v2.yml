@@ -15,8 +15,8 @@ on:
     paths: [.github/workflows/modelos-v2.yml]
 
 env:
-  # Usado só no gatilho temporário de push. Rodada de fumaça: meses só de treino da rodada real.
-  ARGUMENTOS_PUSH: "--meses 3 --fim 2025-01 --treino-meses 1 --holdout-meses 0 --payout 0.86"
+  # Usado só no gatilho temporário de push: rodada real da Fase 6b.
+  ARGUMENTOS_PUSH: "--meses 24 --fim 2026-10 --payout 0.86"
 
 jobs:
   modelos-v2:
