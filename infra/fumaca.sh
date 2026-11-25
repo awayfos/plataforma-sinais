@@ -17,3 +17,5 @@ s1=$($COMPOSE exec -T db psql -U sinais -d sinais -tAc "SELECT count(*) FROM can
 ev=$($COMPOSE exec -T redis redis-cli XLEN candle.fechado)
 echo "candles_1m=$m1 candles_1s=$s1 eventos_candle_fechado=$ev"
 [ "$m1" -gt 0 ] && [ "$s1" -gt 0 ] && [ "$ev" -gt 0 ]
+echo "Conferência da agregação local contra os candles oficiais da Binance:"
+$COMPOSE exec -T coletor python -m sinais.dados.conferencia
