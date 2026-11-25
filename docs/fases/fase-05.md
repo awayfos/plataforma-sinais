@@ -2,7 +2,7 @@
 
 - **Status:** concluída e incorporada à `main`
 - **Plano:** `docs/superpowers/plans/2026-11-25-fase-05-backtesting.md`
-- **Relatório real:** `docs/laboratorio/2026-11-25-baselines.md`
+- **Relatórios reais:** `docs/laboratorio/2026-11-25-baselines.md` (1m) e `docs/laboratorio/2026-11-25-baselines-1s.md` (após a revisão, com 1 s)
 
 ## 1. Objetivo
 
@@ -26,8 +26,15 @@ Todas as estratégias simples ficaram entre **49,3% e 50,8%** de acerto em todas
 
 O resultado era esperado e mostra que o laboratório funciona. Sem análise, operar opções binárias perde, em média, cerca de 7% do valor de cada operação, que é a vantagem embutida no payout. Qualquer modelo da Fase 6 precisa superar esse patamar com margem e de forma estável.
 
+## 3.1 Depois da revisão: simulação realista com preços de 1 s
+
+A revisão mostrou que, com dados de 1 min, a entrada acontecia cedo demais. Agora o laboratório também roda 1m e 5m com preços de 1 s dos 2 últimos meses (5,27 milhões de candles por ativo), com a entrada sorteada entre decisão + 2 s e o prazo de compra.
+
+- As estratégias simples continuam entre **49,2% e 51,1%**, abaixo do equilíbrio de 54,05%. A melhor é seguir o último candle no BTC, em 1 min: 51,11%.
+- **Achado importante para o produto:** em 1 min, **41% das operações do BTC e 28% das do ETH terminam "apertadas"**, com diferença menor que 0,01% do preço. Nessas operações, qualquer diferença entre o preço da Binance e o da Exnova pode inverter o resultado. Em 5 min, isso cai para cerca de 18% (BTC) e 13% (ETH). As expirações de 1 min são as mais sensíveis à diferença entre a corretora e a referência.
+
 ## 4. Auditoria e limitações
 
-- Com dados de 1 minuto, o preço de entrada é a abertura do minuto da decisão. Isso é otimista, porque o usuário real entra alguns segundos depois. Para expirações curtas, a validação final deve usar dados de 1 s.
+- As linhas sem "(1s)" usam a abertura do minuto como entrada e são um limite superior otimista. Para 1m e 5m, valem as linhas "(1s)".
 - Payout de 0,85 e os cortes de 5 min, 30 min e 1 h são hipóteses. Os valores reais da Exnova mudam o ponto de equilíbrio.
-- O walk-forward está pronto e será usado quando houver modelo para treinar (Fase 6).
+- O walk-forward está pronto (purga pelo vencimento real e holdout de 3 meses) e será usado quando houver modelo para treinar (Fase 6).
