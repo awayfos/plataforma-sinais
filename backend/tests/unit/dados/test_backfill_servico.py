@@ -40,3 +40,21 @@ def test_preencher_chama_ao_gravar_com_candles_novos() -> None:
         preencher(fonte, repo, "BTCUSDT", IntervaloColeta.M1, T0, T0 + 3 * M, ao_gravar=ao_gravar)
     )
     assert vistos == [T0, T0 + M, T0 + 2 * M]
+
+
+def test_pagina_invalida_registra_e_continua() -> None:
+    from sinais.dados.provedores.binance.parsing import ErroParsing
+
+    class FonteComPaginaRuim(FonteFalsa):
+        async def klines(self, simbolo, intervalo, inicio, fim, limite=1000):  # type: ignore[no-untyped-def]
+            if inicio == T0 + 1000 * M:
+                raise ErroParsing("linha ruim")
+            return await super().klines(simbolo, intervalo, inicio, fim, limite)
+
+    repo = RepositorioCandlesMemoria()
+    n = asyncio.run(
+        preencher(FonteComPaginaRuim(), repo, "BTCUSDT", IntervaloColeta.M1, T0, T0 + 2500 * M)
+    )
+    assert n == 1500
+    tipos = [e[4] for e in asyncio.run(repo.eventos_qualidade("BTCUSDT"))]
+    assert "pagina_invalida" in tipos

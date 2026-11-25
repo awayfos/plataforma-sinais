@@ -7,6 +7,7 @@ from typing import Protocol
 
 from sinais.core.tempo import InstanteMs
 from sinais.dados.modelos import Candle, IntervaloColeta
+from sinais.dados.provedores.binance.parsing import ErroParsing
 from sinais.dados.qualidade import Lacuna
 from sinais.logs import obter_logger
 from sinais.persistencia.repositorio import RepositorioCandles
@@ -47,7 +48,14 @@ async def preencher(
     gravados = 0
     esperado = inicio
     for a, b in janelas_backfill(inicio, fim, dur):
-        candles = sorted(await fonte.klines(simbolo, intervalo, a, b), key=lambda c: c.abertura)
+        try:
+            pagina = await fonte.klines(simbolo, intervalo, a, b)
+        except ErroParsing as erro:
+            _log.error("backfill.pagina_invalida", extra={"campos": {"erro": str(erro)}})
+            await repo.registrar_qualidade(simbolo, intervalo, Lacuna(a, b), "pagina_invalida")
+            esperado = max(esperado, b)
+            continue
+        candles = sorted(pagina, key=lambda c: c.abertura)
         candles = [c for c in candles if a <= c.abertura < b]
         gravados += await repo.inserir(candles)
         if ao_gravar is not None and candles:

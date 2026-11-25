@@ -106,7 +106,7 @@ def rodar(
 def test_repassa_mensagens() -> None:
     r = RelogioFixo(T0)
     eventos, _ = rodar(Roteiro([["a", "b"]], r), r, ate=2)
-    assert eventos == ["a", "b"]
+    assert eventos == ["<reconectou>", "a", "b"]
 
 
 def test_reconecta_apos_erro_com_backoff() -> None:
@@ -120,7 +120,7 @@ def test_reconecta_apos_erro_com_backoff() -> None:
 def test_chama_ao_reconectar_antes_das_novas_mensagens() -> None:
     r = RelogioFixo(T0)
     eventos, _ = rodar(Roteiro([["a"], ["b"]], r), r, ate=2)
-    assert eventos == ["a", "<reconectou>", "b"]
+    assert eventos == ["<reconectou>", "a", "<reconectou>", "b"]
 
 
 def test_tentativas_zeram_apos_mensagem() -> None:
@@ -134,11 +134,50 @@ def test_renova_conexao_antes_de_24h() -> None:
     r = RelogioFixo(T0)
     roteiro = Roteiro([["a", "b", "c"], ["d"]], r, avanco_ms=3_600_000)
     eventos, _ = rodar(roteiro, r, ate=3, renovar_apos_ms=2 * 3_600_000)
-    assert eventos == ["a", "b", "<reconectou>", "d"]
+    assert eventos == ["<reconectou>", "a", "b", "<reconectou>", "d"]
     assert roteiro.abertas == 2
 
 
 def test_para_quando_evento_parar() -> None:
     r = RelogioFixo(T0)
     eventos, _ = rodar(Roteiro([["a", "b", "c"]], r), r, ate=1)
-    assert eventos == ["a"]
+    assert eventos == ["<reconectou>", "a"]
+
+
+def test_sincroniza_ja_na_primeira_conexao() -> None:
+    """Candles que fecham entre a carga inicial e a primeira conexão não podem se perder."""
+    r = RelogioFixo(T0)
+    eventos, _ = rodar(Roteiro([["a"]], r), r, ate=1)
+    assert eventos[0] == "<reconectou>"
+
+
+def test_bloqueio_418_respeita_espera() -> None:
+    from sinais.dados.provedores.binance.rest import ErroLimiteTaxa
+
+    r = RelogioFixo(T0)
+    esperas: list[float] = []
+    chamadas = {"n": 0}
+    parar = asyncio.Event()
+
+    async def ao_reconectar() -> None:
+        chamadas["n"] += 1
+        if chamadas["n"] == 1:
+            raise ErroLimiteTaxa(300.0)
+
+    async def ao_mensagem(m: str) -> None:
+        parar.set()
+
+    async def dormir(s: float) -> None:
+        esperas.append(s)
+
+    c = ConsumidorStreams(
+        "wss://x",
+        Roteiro([["a"], ["b"]], r),
+        r,
+        ao_mensagem,
+        ao_reconectar,
+        dormir=dormir,
+        aleatorio=lambda: 1.0,
+    )
+    asyncio.run(asyncio.wait_for(c.executar(parar), 5))
+    assert esperas == [300.0]

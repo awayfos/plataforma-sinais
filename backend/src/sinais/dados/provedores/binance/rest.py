@@ -12,17 +12,11 @@ from sinais.core.tempo import InstanteMs
 from sinais.dados.modelos import Candle, IntervaloColeta
 from sinais.dados.provedores.backoff import atraso_backoff
 from sinais.dados.provedores.binance.parsing import ErroParsing, de_linha_rest
+from sinais.dados.provedores.erros import ErroLimiteTaxa
 from sinais.logs import obter_logger
 
 _log = obter_logger(__name__)
-
-
-class ErroLimiteTaxa(Exception):
-    """A Binance bloqueou o IP (HTTP 418). Esperar ``espera_s`` antes de qualquer chamada."""
-
-    def __init__(self, espera_s: float) -> None:
-        super().__init__(f"limite de requisições da Binance: aguardar {espera_s:.0f} s")
-        self.espera_s = espera_s
+__all__ = ["ClienteRestBinance", "ErroLimiteTaxa"]
 
 
 def _retry_after(resposta: httpx.Response, padrao: float) -> float:

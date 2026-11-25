@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Mapping
 
 from sinais.core.tempo import RelogioFixo
 from sinais.dados.modelos import IntervaloColeta
@@ -76,7 +77,7 @@ def test_sincronizar_continua_do_ultimo() -> None:
     c, fonte, repo, _, rel = montar(T0 + 30_000)
     asyncio.run(c.sincronizar())
     fonte.chamadas.clear()
-    rel.definir(T0 + 5 * M + 1)
+    rel.definir(T0 + 5 * M + 2001)
     asyncio.run(c.sincronizar())
     assert fonte.chamadas == [("BTCUSDT", "1m", T0, T0 + 5 * M)]
 
@@ -122,3 +123,64 @@ def test_publica_5m_quando_bloco_completa() -> None:
     for i in range(5):
         asyncio.run(c.ao_mensagem(msg(T0 + i * M)))
     assert aberturas(pub, 5 * M) == [T0]
+
+
+def test_lacuna_ao_vivo_preenchida_pelo_rest() -> None:
+    c, _, _, pub, rel = montar(T0)
+    asyncio.run(c.ao_mensagem(msg(T0)))
+    rel.definir(T0 + 4 * M + 10)
+    asyncio.run(c.ao_mensagem(msg(T0 + 3 * M)))
+    assert aberturas(pub) == [T0, T0 + M, T0 + 2 * M, T0 + 3 * M]
+
+
+def test_margem_nao_baixa_candle_recem_fechado() -> None:
+    c, _, repo, _, _ = montar(T0 + M + 500)
+    asyncio.run(c.sincronizar())
+    assert asyncio.run(repo.ultima_abertura("BTCUSDT", M1)) == T0 - M
+
+
+class PublicadorFalhaUmaVez(PublicadorMemoria):
+    def __init__(self) -> None:
+        super().__init__()
+        self.falhar = True
+
+    async def publicar(self, stream: str, campos: Mapping[str, str]) -> None:
+        if self.falhar:
+            self.falhar = False
+            raise ConnectionError("redis fora")
+        await super().publicar(stream, campos)
+
+
+def test_falha_de_publicacao_republica_ao_reconectar() -> None:
+    fonte, repo, pub, rel = (
+        FonteFalsa(),
+        RepositorioCandlesMemoria(),
+        PublicadorFalhaUmaVez(),
+        RelogioFixo(T0 + M + 10),
+    )
+    c = Coletor(["BTCUSDT"], [M1], fonte, repo, pub, rel, historico_dias=1, historico_dias_1s=1)
+    try:
+        asyncio.run(c.ao_mensagem(msg(T0)))
+    except ConnectionError:
+        pass
+    assert aberturas(pub) == []
+    asyncio.run(c.ao_reconectar())
+    assert T0 in aberturas(pub)
+
+
+def test_com_novas_tentativas_respeita_418_e_backoff() -> None:
+    from sinais.dados.provedores.binance.rest import ErroLimiteTaxa
+    from sinais.processos.coletor_binance import com_novas_tentativas
+
+    erros: list[Exception] = [ErroLimiteTaxa(300.0), OSError("rede")]
+    esperas: list[float] = []
+
+    async def tarefa() -> None:
+        if erros:
+            raise erros.pop(0)
+
+    async def dormir(s: float) -> None:
+        esperas.append(s)
+
+    asyncio.run(com_novas_tentativas(tarefa, dormir=dormir, aleatorio=lambda: 1.0))
+    assert esperas == [300.0, 1.0]

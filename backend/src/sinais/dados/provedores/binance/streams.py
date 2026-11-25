@@ -10,6 +10,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from sinais.core.tempo import Relogio
 from sinais.dados.modelos import IntervaloColeta
 from sinais.dados.provedores.backoff import atraso_backoff
+from sinais.dados.provedores.erros import ErroLimiteTaxa
 from sinais.logs import obter_logger
 
 _log = obter_logger(__name__)
@@ -52,17 +53,14 @@ class ConsumidorStreams:
         self._aleatorio = aleatorio
 
     async def executar(self, parar: asyncio.Event) -> None:
-        """Consome até ``parar`` ser acionado. ``ao_reconectar`` roda antes das mensagens
-        de toda conexão que não seja a primeira tentativa (para preencher a lacuna)."""
+        """Consome até ``parar`` ser acionado. ``ao_reconectar`` roda antes das mensagens de
+        toda conexão, inclusive a primeira: preenche o que fechou enquanto não havia conexão."""
         tentativa = 0
-        primeira = True
         while not parar.is_set():
             recebidas = 0
             try:
                 async with self._conectar(self._url) as mensagens:
-                    if not primeira:
-                        await self._ao_reconectar()
-                    primeira = False
+                    await self._ao_reconectar()
                     inicio = self._relogio.agora_ms()
                     _log.info("binance.ws.conectado", extra={"campos": {"url": self._url}})
                     async for m in mensagens:
@@ -76,8 +74,11 @@ class ConsumidorStreams:
                             break
             except asyncio.CancelledError:
                 raise
+            except ErroLimiteTaxa as erro:
+                _log.error("binance.bloqueio", extra={"campos": {"espera_s": erro.espera_s}})
+                await self._dormir(erro.espera_s)
+                continue
             except Exception as erro:
-                primeira = False
                 espera = atraso_backoff(tentativa, aleatorio=self._aleatorio)
                 tentativa += 1
                 _log.warning(
