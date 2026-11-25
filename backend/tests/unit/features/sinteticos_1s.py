@@ -32,3 +32,19 @@ def passeio_1s(minutos: int, semente: int = 3, t0: int = T0) -> pd.DataFrame:
     df = segundos(c, v=v, vb=v * rng.uniform(0, 1, k), t0=t0)
     df["n"] = np.where(v > 0, rng.integers(1, 20, k), 0).astype("float64")
     return df
+
+
+def para_1m(df_1s: pd.DataFrame) -> pd.DataFrame:
+    """Candles de 1m coerentes com os segundos (como os klines oficiais)."""
+    t = df_1s.index.to_numpy(dtype="int64")
+    g = df_1s.groupby(pd.Index(t - t % 60_000, name="abertura"))
+    return pd.DataFrame(
+        {
+            "o": g["o"].first(),
+            "h": g["h"].max(),
+            "l": g["l"].min(),
+            "c": g["c"].last(),
+            "v": g["v"].sum(),
+            "vb": g["vb"].sum(),
+        }
+    )
