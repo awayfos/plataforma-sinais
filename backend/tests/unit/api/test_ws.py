@@ -17,6 +17,7 @@ from ..processos.test_motor_analise import linha  # noqa: E402
 from .apoio import App, csrf, entrar, entrar_admin, montar  # noqa: E402
 
 SENHA = "senha-forte-123"
+H = 3_600_000
 
 
 def preparar(recursos: Any = None, fim: int = T0 + 30 * D) -> App:
@@ -114,13 +115,13 @@ def test_mensagem_invalida_e_ativo_fora_do_plano() -> None:
 
 
 def test_vencimento_durante_a_conexao_fecha_4402() -> None:
-    app = preparar(fim=T0 + D)
+    app = preparar(fim=T0 + H)
     with app.cliente() as c:
         entrar(c, "ana@exemplo.com", SENHA)
         with c.websocket_connect("/api/ws", headers=cabecalho(c)) as ws:
             ws.send_json({"acao": "assinar", "canal": "sinais:BTCUSDT"})
             ws.receive_json()
-            app.amb.relogio.avancar(D)
+            app.amb.relogio.avancar(H)
             with pytest.raises(WebSocketDisconnect) as e:
                 ws.receive_json()
             assert e.value.code == 4402

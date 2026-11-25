@@ -42,6 +42,12 @@ services:
       SINAIS_HISTORICO_DIAS_1S: ${SINAIS_HISTORICO_DIAS_1S:-2}
       SINAIS_BINANCE_REST_URL: ${SINAIS_BINANCE_REST_URL:-https://api.binance.com}
       SINAIS_BINANCE_WS_URL: ${SINAIS_BINANCE_WS_URL:-wss://data-stream.binance.vision}
+      # API e contas (ADR-12). A chave cifra o segredo TOTP dos admins: gere uma por ambiente.
+      SINAIS_CHAVE_CIFRA: ${SINAIS_CHAVE_CIFRA:?defina SINAIS_CHAVE_CIFRA no .env}
+      SINAIS_COOKIE_SEGURO: ${SINAIS_COOKIE_SEGURO:-true}
+      SINAIS_SESSOES_SIMULTANEAS: ${SINAIS_SESSOES_SIMULTANEAS:-1}
+      SINAIS_REGISTRO_MODELOS: ${SINAIS_REGISTRO_MODELOS:-/app/registro}
+      SINAIS_ORIGENS_PERMITIDAS: ${SINAIS_ORIGENS_PERMITIDAS:-}
     depends_on:
       db:
         condition: service_healthy
@@ -58,6 +64,43 @@ services:
       redis:
         condition: service_healthy
     command: ["python", "-m", "sinais.processos.coletor_binance"]
+    restart: unless-stopped
+
+  motor_analise:
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    environment: *ambiente_backend
+    depends_on:
+      migracoes:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "sinais.processos.motor_analise"]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    environment: *ambiente_backend
+    depends_on:
+      migracoes:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: ["python", "-m", "sinais.processos.api"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/publico/estatisticas', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 30
     restart: unless-stopped
 
 volumes:

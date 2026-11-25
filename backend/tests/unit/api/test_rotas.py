@@ -121,11 +121,11 @@ def test_trocar_senha_e_logout() -> None:
 
 
 def test_assinatura_vencida_402_nos_dados_mas_ve_a_conta() -> None:
-    app = preparar(fim=T0_CONTAS + D)
+    app = preparar(fim=T0_CONTAS + 3_600_000)
     c = app.cliente()
     entrar(c, "ana@exemplo.com", SENHA)
     assert c.get("/api/ativos").status_code == 200
-    app.amb.relogio.avancar(D)
+    app.amb.relogio.avancar(3_600_000)
     for rota in ("/api/ativos", "/api/sinais?simbolo=BTCUSDT", "/api/analise?simbolo=BTCUSDT"):
         r = c.get(rota)
         assert r.status_code == 402 and erro_de(r)["codigo"] == "assinatura_vencida", rota
