@@ -4,7 +4,8 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 
 ## Estado atual
 
-- **Fase atual:** 5 — Backtesting (concluída), próxima: 6 — Modelos e calibração (relatório de decisão)
+- **Fase atual:** 6 — Modelos (concluída). **Portão de decisão do cliente** antes da Fase 7.
+- **Resultado da Fase 6:** modelos 53–55,5% fora da amostra (estratégias simples ~50%); nenhuma combinação aprovada com payout hipotético de 85% (equilíbrio 54,05%). Viabilidade depende do payout real da Exnova (`docs/fases/fase-06.md`).
 - **Primeiro resultado real:** estratégias simples ~50% de acerto contra 54,05% de equilíbrio (payout 0,85 hipotético) → valor esperado ≈ −7% por operação (`docs/laboratorio/2026-11-25-baselines.md`). Com preços de 1 s: até 51,1%, e 41% das operações de 1 min do BTC terminam "apertadas" (`docs/laboratorio/2026-11-25-baselines-1s.md`)
 - **Status:** Fase 3 com CI verde, incluindo coleta real da Binance e conferência com os klines oficiais
 - **Repositório:** https://github.com/awayfos/plataforma-sinais (privado)
@@ -19,7 +20,7 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 | 3 | Dados de mercado | Concluída (`docs/fases/fase-03.md`) | 2026-11-25 |
 | 4 | Motores de análise | Concluída (`docs/fases/fase-04.md`) | 2026-11-25 |
 | 5 | Backtesting e validação | Concluída (`docs/fases/fase-05.md`) | 2026-11-25 |
-| 6 | Modelos e calibração (relatório de decisão) | Não iniciada | — |
+| 6 | Modelos e calibração (relatório de decisão) | Concluída — aguardando decisão (`docs/fases/fase-06.md`) | 2026-11-25 |
 | 7 | Motor de sinais ao vivo (início do teste de 60 a 90 dias) | Não iniciada | — |
 | 8 | Contas e autenticação | Não iniciada | — |
 | 9 | Plataforma web | Não iniciada | — |
