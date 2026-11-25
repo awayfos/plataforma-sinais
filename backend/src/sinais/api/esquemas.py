@@ -56,6 +56,7 @@ class Usuario(_Saida):
     nome: str
     papel: Literal["cliente", "admin"]
     modo: Literal["essencial", "avancado"]
+    layout: dict[str, Any] = Field(default_factory=dict)
     assinatura: AssinaturaUsuario
 
 
@@ -159,6 +160,10 @@ class Sinal(_Saida):
     janela_ate: int | None
     invalidacao: str | None
     modelo: str | None
+    # Janela de entrada (design §12.6): tolerância de preço (k × ATR, em preço) e preço de
+    # referência (string decimal). Nulos enquanto a direção for AGUARDAR.
+    tolerancia_preco: float | None = None
+    preco_referencia: str | None = None
 
 
 class SinalHistorico(_Saida):
@@ -220,6 +225,7 @@ class PlanoEntrada(_Entrada):
 
 
 class PlanoEdicao(_Entrada):
+    id: int | None = None  # aceito no corpo de PATCH /api/admin/planos (plano inteiro)
     nome: str | None = Field(default=None, min_length=1, max_length=80)
     duracao_dias: int | None = Field(default=None, gt=0, le=3660)
     preco_centavos: int | None = Field(default=None, ge=0)
@@ -246,20 +252,24 @@ class Assinatura(_Saida):
 class Acesso(_Saida):
     id: int
     usuario_id: int | None
+    email: str | None
     evento: str
     ip: str
     user_agent: str
     t: int
+    ts: int  # o mesmo instante de ``t`` (nome usado pelo frontend)
 
 
 class RegistroAuditoria(_Saida):
     id: int
     admin_id: int
+    admin_email: str | None
     acao: str
     alvo: str
     antes: dict[str, Any] | None
     depois: dict[str, Any] | None
     t: int
+    ts: int
 
 
 class Payout(BaseModel):
@@ -276,6 +286,7 @@ class EventoQualidade(_Saida):
     inicio: int
     fim: int
     tipo: str
+    detalhes: dict[str, Any] | None = None
 
 
 # ------------------------------------------------------------------ público

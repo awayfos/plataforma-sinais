@@ -31,7 +31,17 @@ D = 86_400_000
 
 def _usuario(status: StatusUsuario = StatusUsuario.ATIVO) -> Usuario:
     return Usuario(
-        1, "a@b.com", "Ana", Papel.CLIENTE, status, "h", None, None, Modo.AVANCADO, {}, T0
+        1,
+        "a@b.com",
+        "Ana",
+        Papel.CLIENTE,
+        status,
+        "h",
+        None,
+        None,
+        Modo.AVANCADO,
+        {"BTCUSDT": {"linhas": [1]}},
+        T0,
     )
 
 
@@ -45,6 +55,7 @@ def test_usuario_saida_com_e_sem_assinatura() -> None:
         "nome": "Ana",
         "papel": "cliente",
         "modo": "avancado",
+        "layout": {"BTCUSDT": {"linhas": [1]}},
         "assinatura": {"plano": "Mensal", "status": "ativa", "vence_em": T0 + D},
     }
     assert usuario_saida(_usuario(), a, p, T0 + D).assinatura.status == "vencida"
@@ -201,3 +212,48 @@ def test_ip_do_cliente_usa_a_ultima_entrada_do_proxy_confiavel() -> None:
     assert ip_do_cliente("10.0.0.5", " ", confiar_proxy=True) == "10.0.0.5"
     assert ip_do_cliente(None, None, confiar_proxy=True) == "desconhecido"
     assert len(ip_do_cliente("x" * 100, None, confiar_proxy=False)) == 64
+
+
+def test_acesso_auditoria_qualidade_com_campos_do_frontend() -> None:
+    from sinais.api.visoes import acesso_saida, auditoria_saida, qualidade_saida
+    from sinais.contas.modelos import RegistroAcesso, RegistroAuditoria
+
+    a = acesso_saida(RegistroAcesso(5, 1, "login", "1.2.3.4", "ua", T0), "a@b.com")
+    assert a.model_dump() == {
+        "id": 5,
+        "usuario_id": 1,
+        "email": "a@b.com",
+        "evento": "login",
+        "ip": "1.2.3.4",
+        "user_agent": "ua",
+        "t": T0,
+        "ts": T0,
+    }
+    r = auditoria_saida(
+        RegistroAuditoria(7, 2, "plano.criar", "plano:1", None, {"x": 1}, T0), "adm@b.com"
+    )
+    assert r.model_dump() == {
+        "id": 7,
+        "admin_id": 2,
+        "admin_email": "adm@b.com",
+        "acao": "plano.criar",
+        "alvo": "plano:1",
+        "antes": None,
+        "depois": {"x": 1},
+        "t": T0,
+        "ts": T0,
+    }
+    q = qualidade_saida(("BTCUSDT", "1m", T0, T0 + 60_000, "lacuna"))
+    assert q.model_dump() == {
+        "simbolo": "BTCUSDT",
+        "intervalo": "1m",
+        "inicio": T0,
+        "fim": T0 + 60_000,
+        "tipo": "lacuna",
+        "detalhes": None,
+    }
+
+
+def test_sinal_tem_tolerancia_e_preco_de_referencia_nulos_em_aguardar() -> None:
+    s = sinais_para("BTCUSDT", ("1m",), lambda s, e: None)[0].model_dump()
+    assert s["tolerancia_preco"] is None and s["preco_referencia"] is None

@@ -28,6 +28,7 @@ def usuario_saida(
         nome=u.nome,
         papel=u.papel.value,
         modo=u.modo.value,
+        layout=u.layout,
         assinatura=e.AssinaturaUsuario(
             plano=p.nome if p else None,
             status=status_assinatura(u, a, agora),
@@ -74,26 +75,30 @@ def assinatura_saida(a: Assinatura) -> e.Assinatura:
     )
 
 
-def acesso_saida(r: RegistroAcesso) -> e.Acesso:
+def acesso_saida(r: RegistroAcesso, email: str | None) -> e.Acesso:
     return e.Acesso(
         id=r.id,
         usuario_id=r.usuario_id,
+        email=email,
         evento=r.evento,
         ip=r.ip,
         user_agent=r.user_agent,
         t=r.t,
+        ts=r.t,
     )
 
 
-def auditoria_saida(r: RegistroAuditoria) -> e.RegistroAuditoria:
+def auditoria_saida(r: RegistroAuditoria, admin_email: str | None) -> e.RegistroAuditoria:
     return e.RegistroAuditoria(
         id=r.id,
         admin_id=r.admin_id,
+        admin_email=admin_email,
         acao=r.acao,
         alvo=r.alvo,
         antes=r.antes,
         depois=r.depois,
         t=r.t,
+        ts=r.t,
     )
 
 

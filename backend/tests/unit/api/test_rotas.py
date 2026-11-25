@@ -43,6 +43,7 @@ def test_login_define_cookies_seguros_e_devolve_usuario() -> None:
         "nome": "Ana",
         "papel": "cliente",
         "modo": "essencial",
+        "layout": {},
         "assinatura": {
             "plano": "Plano BTCUSDT,ETHUSDT",
             "status": "ativa",
@@ -242,3 +243,51 @@ def test_admin_fluxo_completo_e_cliente_sem_acesso() -> None:
     assert adm.put("/api/admin/corretoras/exnova/payout", json=ruim, headers=h).status_code == 422
     assert adm.get("/api/admin/qualidade").json() == []
     assert adm.patch("/api/admin/usuarios/9999", json={"nome": "x"}, headers=h).status_code == 404
+
+
+def test_eu_devolve_o_layout_salvo() -> None:
+    c = preparar().cliente()
+    entrar(c, "ana@exemplo.com", SENHA)
+    layout = {"BTCUSDT": {"desenhos": [{"tipo": "linha", "preco": 50000}]}}
+    assert (
+        c.patch("/api/eu/preferencias", json={"layout": layout}, headers=csrf(c)).json()["layout"]
+        == layout
+    )
+    assert c.get("/api/eu").json()["layout"] == layout
+
+
+def test_assinatura_vencida_nunca_da_402_na_conta_nem_no_logout() -> None:
+    app = preparar(fim=T0_CONTAS + 3_600_000)
+    c = app.cliente()
+    entrar(c, "ana@exemplo.com", SENHA)
+    app.amb.relogio.avancar(3_600_000)
+    eu = c.get("/api/eu")
+    assert eu.status_code == 200 and eu.json()["assinatura"]["plano"] == "Plano BTCUSDT,ETHUSDT"
+    r = c.post(
+        "/api/eu/senha",
+        json={"senha_atual": SENHA, "senha_nova": "nova-senha-456"},
+        headers=csrf(c),
+    )
+    assert r.status_code == 204
+    assert c.post("/api/auth/logout", headers=csrf(c)).status_code == 204
+    assert c.get("/api/eu").status_code == 401
+
+
+def test_patch_de_plano_com_id_no_corpo_e_logs_com_email() -> None:
+    app = preparar()
+    adm = app.cliente()
+    entrar_admin(app, adm)
+    h = csrf(adm)
+    p = adm.get("/api/admin/planos").json()[0]
+    p["preco_centavos"] = 4321
+    r = adm.patch("/api/admin/planos", json=p, headers=h)
+    assert r.status_code == 200 and r.json() == p
+    sem_id = {k: v for k, v in p.items() if k != "id"}
+    assert adm.patch("/api/admin/planos", json=sem_id, headers=h).status_code == 422
+    outro = {**p, "id": p["id"] + 99}
+    assert adm.patch(f"/api/admin/planos/{p['id']}", json=outro, headers=h).status_code == 422
+    aud = adm.get("/api/admin/auditoria").json()[0]
+    assert aud["admin_email"] == "admin@exemplo.com" and aud["ts"] == aud["t"]
+    acesso = adm.get("/api/admin/acessos").json()[0]
+    assert acesso["email"] == "admin@exemplo.com" and acesso["ts"] == acesso["t"]
+    assert adm.get("/api/admin/qualidade").json() == []

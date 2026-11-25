@@ -146,6 +146,17 @@ Pendências menores registradas (não bloqueiam): a última análise não expira
 - Admin: `PATCH /api/admin/usuarios/{id}` e `PATCH /api/admin/planos/{id}`; `plano` na criação de usuário aceita id ou nome; e-mail ou nome de plano repetido → 409; a API cria só clientes (admins só pelo `criar_admin`, que provisiona o TOTP).
 - `fastapi==0.165.0` (versão atual resolvida no CI; o ADR-03 citava a série 0.14x — a regra de fixar com `==` foi mantida).
 
+## Acréscimos pedidos pelo frontend (compatíveis com a v1)
+
+Pedidos em `docs/fases/fase-09-frontend.md` §3 (branch `plataforma-frontend`), implementados como campos e rotas a mais, sem remover nada:
+
+1. `Usuario.layout: object` em `GET /api/eu` (e nas demais respostas com `Usuario`): o que foi salvo por `PATCH /api/eu/preferencias`.
+2. `Sinal.tolerancia_preco: number|null` (k × ATR, em preço) e `Sinal.preco_referencia: string|null` (design §12.6); nulos em AGUARDAR.
+3. Formatos fixados: `UsuarioAdmin = Usuario + {status, criado_em}`; `Acesso = {id, usuario_id, email, evento, ip, user_agent, t, ts}`; `Auditoria = {id, admin_id, admin_email, acao, alvo, antes, depois, t, ts}`; `EventoQualidade = {simbolo, intervalo, inicio, fim, tipo, detalhes}`; `EstatisticaPublica = {simbolo, expiracao, n, taxa, inicio, fim}`. `ts` repete `t` (nome usado pelo frontend).
+4. `GET /api/eu`, `POST /api/eu/senha` e `POST /api/auth/logout` funcionam com assinatura vencida (só 401 sem sessão, nunca 402). Já era assim; agora há teste específico.
+5. `PATCH /api/admin/planos` com o plano inteiro (incluindo `id`) no corpo, além de `PATCH /api/admin/planos/{id}`; `id` do corpo diferente do da rota → 422.
+6. Payout sempre em fração (0,86), `0 < payout <= 1`.
+
 ## Não feito nesta entrega
 
 - Motor de sinais (decisão por expiração), liquidador e monitor da Fase 7: dependem de um campeão aprovado.
