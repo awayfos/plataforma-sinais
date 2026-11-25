@@ -39,7 +39,7 @@
 
 ---
 
-### Tarefa 1: leitura dos klines de 1 s
+### Task 1 (Tarefa): leitura dos klines de 1 s
 
 **Arquivos:** criar `backend/src/sinais/modelos/dados_1s.py`; teste `backend/tests/unit/modelos/test_dados_1s.py`.
 
@@ -48,7 +48,7 @@
 - [ ] Teste: zip sintético com 3 linhas em µs → índice em ms e colunas certas; outro em ms → igual.
 - [ ] Ver falhar; implementar com `pd.read_csv` direto do membro do zip (`usecols`); ver passar; commit.
 
-### Tarefa 2: microestrutura por minuto
+### Task 2 (Tarefa): microestrutura por minuto
 
 **Arquivos:** criar `backend/src/sinais/features/microestrutura.py`; teste `backend/tests/unit/features/test_microestrutura.py`.
 
@@ -61,7 +61,7 @@
 - [ ] Testes: minuto conhecido (valores à mão: taxa de compra, retorno dos últimos 10 s, segundos parados, sequência, segundos desde a mudança atravessando minuto); minuto sem volume → NaN, sem inf; agregação em dois pedaços = inteira; janela ao vivo de 120 min reproduz o histórico.
 - [ ] Ver falhar; implementar (groupby vetorizado); ver passar; commit.
 
-### Tarefa 3: conjunto `fs-2` e regressão de vazamento
+### Task 3 (Tarefa): conjunto `fs-2` e regressão de vazamento
 
 **Arquivos:** criar `backend/src/sinais/features/fs2.py`; teste `backend/tests/regressao_vazamento/test_causalidade_fs2.py` e `backend/tests/unit/features/test_fs2.py`.
 
@@ -71,7 +71,7 @@
 - [ ] Validar o teste por mutação: trocar um `rolling` por `.shift(-1)` e ver o teste de vazamento falhar; desfazer.
 - [ ] Commit.
 
-### Tarefa 4: rótulos com 1 s
+### Task 4 (Tarefa): rótulos com 1 s
 
 **Arquivos:** modificar `backend/src/sinais/modelos/rotulos.py`; teste `backend/tests/unit/modelos/test_rotulos_1s.py`.
 
@@ -80,7 +80,7 @@
 - [ ] Testes: entradas sempre em segundos inteiros dentro de `[teto(decisão+2 s), prazo]` em 1m e 5m; alvo/apertado batem com `simular(..., entrada_aleatoria)` linha a linha quando a entrada é a mesma; vencimento depois do fim → NaN.
 - [ ] Ver falhar; implementar vetorizado; ver passar; commit.
 
-### Tarefa 5: filtro de apertados
+### Task 5 (Tarefa): filtro de apertados
 
 **Arquivos:** criar `backend/src/sinais/modelos/filtro.py`; teste `backend/tests/unit/modelos/test_filtro.py`.
 
@@ -89,7 +89,7 @@
 - [ ] Testes: quando as decisões com p_ap alto são moeda e as outras acertam, escolhe um quantil; quando tudo é igual, devolve `inf`; poucos casos → `inf`.
 - [ ] Ver falhar; implementar; ver passar; commit.
 
-### Tarefa 6: avaliação walk-forward v2
+### Task 6 (Tarefa): avaliação walk-forward v2
 
 **Arquivos:** criar `backend/src/sinais/modelos/avaliacao_v2.py`; teste `backend/tests/unit/modelos/test_avaliacao_v2.py`.
 
@@ -98,7 +98,7 @@
 - [ ] Testes: ponta a ponta com passeio aleatório em 1 s → Wilson inf abaixo do equilíbrio, baselines presentes; série com sinal plantado nas features → taxa > 60%; operações de teste e holdout simuladas com 1 s e entrada sorteada (entrada_t não alinhada ao minuto).
 - [ ] Ver falhar; implementar; ver passar; commit.
 
-### Tarefa 7: relatório e linha de comando v2 + workflow
+### Task 7 (Tarefa): relatório e linha de comando v2 + workflow
 
 **Arquivos:** criar `backend/src/sinais/modelos/decisao_v2.py`, `.github/workflows/modelos-v2.yml`; teste `backend/tests/unit/modelos/test_decisao_v2.py`.
 
@@ -108,7 +108,7 @@
 - [ ] Workflow: `workflow_dispatch` + gatilho `push` temporário no ramo com filtro de caminho; timeout 300; `/usr/bin/time -v`; artefato.
 - [ ] Rodada de fumaça; depois a rodada real; baixar o relatório.
 
-### Tarefa 8: documentação, limpeza e PR
+### Task 8 (Tarefa): documentação, limpeza e PR
 
 - [ ] `docs/laboratorio/2026-11-25-modelo-v2-payout-86.md` (relatório real) e `docs/fases/fase-06b-modelo-v2.md` (resultado honesto).
 - [ ] Remover o gatilho `push` do workflow; suíte, mypy e ruff verdes; push; PR; CI verde. Não fazer merge.
