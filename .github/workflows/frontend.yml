@@ -29,7 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - name: npm install
+        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm ls next react react-dom lightweight-charts tailwindcss vitest @playwright/test typescript eslint
       - run: npm run lint
       - run: npm run typecheck
@@ -42,7 +43,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - name: npm install
+        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm test
 
   build-e2e:
@@ -53,7 +55,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - name: npm install
+        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
