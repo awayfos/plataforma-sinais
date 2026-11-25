@@ -19,7 +19,36 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
-      - run: uv run pytest --cov=sinais.core --cov=sinais.logs --cov-fail-under=90
+      - run: uv run pytest --cov=sinais.core --cov=sinais.logs --cov=sinais.dados --cov-fail-under=90
+
+  integracao:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: timescale/timescaledb:latest-pg18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      SINAIS_TESTE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SINAIS_TESTE_REDIS_URL: redis://localhost:6379/0
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run pytest -m integracao tests/integracao -v
 
   infra:
     runs-on: ubuntu-latest

@@ -42,7 +42,7 @@ files = ["src", "tests"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["asyncpg", "asyncpg.*", "websockets", "websockets.*"]
+module = ["asyncpg.*", "asyncpg", "websockets", "websockets.*", "sqlalchemy", "sqlalchemy.*", "alembic", "alembic.*", "redis", "redis.*"]
 ignore_missing_imports = true
 
 [tool.ruff]
