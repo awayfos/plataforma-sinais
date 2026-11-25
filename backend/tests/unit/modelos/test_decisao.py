@@ -22,6 +22,7 @@ def resultado(w: int, lo: int, hw: int, hl: int, base_w: int = 500) -> Resultado
         baselines={"sempre_compra": ops(base_w, 1000 - base_w)},
         ece_medio=0.01,
         dobras=3,
+        meses_testados=3,
     )
 
 
@@ -50,3 +51,17 @@ def test_markdown_tem_hipoteses_e_tabela() -> None:
     texto = gerar_markdown_decisao(linhas, {"payout": "0.85 (hipotético)"})
     assert "0.85 (hipotético)" in texto
     assert "| BTCUSDT | 15m |" in texto
+
+
+def test_holdout_pequeno_reprova() -> None:
+    [linha] = consolidar({("BTCUSDT", Expiracao.M15): resultado(700, 300, 3, 1)}, 0.85)
+    assert linha.recomendacao == "não ligar"
+    assert "holdout" in linha.motivo
+
+
+def test_meses_sem_operacao_contam_como_abaixo() -> None:
+    r = resultado(700, 300, 70, 30)
+    r.meses_testados = 14
+    [linha] = consolidar({("BTCUSDT", Expiracao.M15): r}, 0.85)
+    assert linha.meses_acima < 0.7
+    assert linha.recomendacao == "não ligar"
