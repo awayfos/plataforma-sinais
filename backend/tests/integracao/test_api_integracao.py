@@ -193,6 +193,8 @@ def test_revogacao_fecha_ws_4401(amb: Ambiente) -> None:
 
 
 def test_fan_out_do_redis_streams_ate_o_websocket(amb: Ambiente) -> None:
+    # Sem verificação periódica no meio: o cliente fecha enquanto o servidor está ocioso.
+    amb.app.servicos.ws_verificacao_s = 30
     analise = montar_analise("BTCUSDT", linha(), "50000.1")
     texto = analise.model_dump_json()
     h = amb.cabecalhos("so_btc")

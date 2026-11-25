@@ -22,7 +22,9 @@ jobs:
       - name: Versões resolvidas da API e das contas
         run: uv pip list | grep -iE "fastapi|starlette|uvicorn|argon2|pyotp|cryptography" || true
       - name: Gera o OpenAPI a partir do código
-        run: uv run python -m sinais.api.openapi > ../docs/api/openapi-v1.gerado.json
+        run: |
+          uv run python -m sinais.api.openapi > ../docs/api/openapi-v1.gerado.json
+          echo "=== OPENAPI INICIO ==="; base64 -w 0 ../docs/api/openapi-v1.gerado.json; echo; echo "=== OPENAPI FIM ==="
       - uses: actions/upload-artifact@v4
         with:
           name: openapi-v1

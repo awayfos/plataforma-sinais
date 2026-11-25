@@ -113,11 +113,11 @@ def test_usuario_a_nunca_le_dados_de_b() -> None:
     r = a.patch("/api/eu/preferencias", json={"layout": {"x": 1}}, headers=hb)
     assert r.status_code == 403
     # a sessão de B não vale com o cookie CSRF de A
-    tok_b = b.cookies.get("sinais_sessao")
+    tok_b, csrf_a = b.cookies.get("sinais_sessao"), a.cookies.get("sinais_csrf")
     mista = app.cliente()
-    mista.cookies.set("sinais_sessao", tok_b or "", domain="testserver")
-    mista.cookies.set("sinais_csrf", a.cookies.get("sinais_csrf") or "", domain="testserver")
-    assert mista.patch("/api/eu/preferencias", json={}, headers=csrf(mista)).status_code == 403
+    h = {"cookie": f"sinais_sessao={tok_b}; sinais_csrf={csrf_a}", "X-CSRF-Token": csrf_a or ""}
+    assert mista.get("/api/eu", headers=h).json()["id"] == eb["id"]
+    assert mista.patch("/api/eu/preferencias", json={}, headers=h).status_code == 403
     # nenhuma rota de cliente aceita um id de outro usuário: não há parâmetro de usuário
     assert a.get(f"/api/eu?usuario_id={eb['id']}").json()["id"] == ea["id"]
     assert a.get(f"/api/admin/acessos?usuario_id={eb['id']}").status_code == 403

@@ -137,6 +137,7 @@ class ConexaoWs:
 
     async def executar(self) -> None:
         codigo: int | None = 1000
+        tarefas: list[asyncio.Task[None]] = []
         try:
             await self._validar()
             tarefas = [
@@ -160,6 +161,10 @@ class ConexaoWs:
         except _Fechar as f:
             codigo = f.codigo
         finally:
+            # Também no cancelamento da própria conexão: nenhuma tarefa fica órfã.
+            for t in tarefas:
+                if not t.done():
+                    t.cancel()
             self._s.distribuidor.remover(self._assinante)
         if codigo is not None:
             with suppress(Exception):
