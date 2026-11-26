@@ -3,8 +3,9 @@ zip de 1 s → ``ler_zip_1s`` → ``AgregadorMicro`` → ``montar_snapshot_em_bl
 ``combinar_fs2`` → ``avaliar_combinacao_v2``.
 
 A direção do minuto m é sorteada (subida, queda ou parado); nos últimos 10 s do minuto
-m − 1 toda a agressão é de compra (se m sobe) ou de venda (se m cai). Os candles de 1m não carregam essa informação, então só um
-caminho de microestrutura sem defeito encontra o sinal (prova contra falso negativo).
+m − 1 toda a agressão é de compra (se m sobe) ou de venda (se m cai). Os candles de 1m não
+carregam essa informação, então só um caminho de microestrutura sem defeito encontra o sinal
+(prova contra falso negativo).
 """
 
 import io
