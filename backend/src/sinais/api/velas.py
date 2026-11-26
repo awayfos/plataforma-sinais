@@ -77,6 +77,10 @@ class GestorVelas:
         self._velas = {s: VelaEmFormacao(s) for s in simbolos}
         self._mudaram: set[str] = set()
 
+    @property
+    def simbolos(self) -> tuple[str, ...]:
+        return tuple(self._velas)
+
     async def carregar(self, simbolos: Sequence[str] | None = None, ate: int = 0) -> None:
         """1m oficiais do banco desde o início da semana atual (o maior tempo gráfico) até
         agora (ou até ``ate``, o fim do evento que pediu a recarga, se for depois)."""

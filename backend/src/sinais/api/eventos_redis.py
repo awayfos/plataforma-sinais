@@ -12,6 +12,7 @@ from sinais.api.velas import GestorVelas
 from sinais.api.ws_canais import Distribuidor, traduzir_evento
 from sinais.dados.negocios import ErroNegocio, de_payload
 from sinais.eventos.contratos import STREAM_ANALISE_ATUALIZADA, STREAM_CANDLE_FECHADO
+from sinais.eventos.ticks_recentes import ler_recentes
 from sinais.logs import obter_logger
 
 _log = obter_logger(__name__)
@@ -70,17 +71,47 @@ def fonte_redis(redis: Any, bloqueio_ms: int = 5000) -> FonteEventos:  # pragma:
     return ler
 
 
-def fonte_ticks(
-    redis: Any, velas: GestorVelas
-) -> Callable[[], Coroutine[Any, Any, None]]:  # pragma: no cover - CI
-    """Assina ``ticks:*`` no Pub/Sub e entrega cada negócio à vela em formação."""
+async def reproduzir_recentes(redis: Any, velas: GestorVelas) -> int:
+    """Relê ``ticks.recentes:{SIMBOLO}`` (minuto atual e anterior) e entrega à vela. Devolve
+    quantos negócios foram lidos; repetidos são descartados pela própria vela (id)."""
+    lidos = 0
+    for simbolo in velas.simbolos:
+        try:
+            textos = await ler_recentes(redis, simbolo)
+        except Exception as erro:
+            _log.error(
+                "api.ticks_recentes_falhou",
+                extra={"campos": {"simbolo": simbolo, "erro": type(erro).__name__}},
+            )
+            continue
+        for texto in textos:
+            try:
+                s, n = de_payload(texto)
+            except ErroNegocio:
+                continue
+            velas.ao_negocio(s, n)
+            lidos += 1
+    return lidos
+
+
+def fonte_ticks(redis: Any, velas: GestorVelas) -> Callable[[], Coroutine[Any, Any, None]]:
+    """Assina ``ticks:*`` no Pub/Sub e entrega cada negócio à vela em formação.
+
+    A cada confirmação de assinatura (subida da API, reconexão do Pub/Sub ou reinício pela
+    supervisão) relê os negócios recentes guardados pelo processo de ticks antes de seguir ao
+    vivo: o que foi publicado enquanto ninguém ouvia não se perde."""
 
     async def ouvir() -> None:
         pubsub = redis.pubsub()
         await pubsub.psubscribe("ticks:*")
         try:
             async for msg in pubsub.listen():
-                if msg.get("type") != "pmessage":
+                tipo = msg.get("type")
+                if tipo == "psubscribe":
+                    lidos = await reproduzir_recentes(redis, velas)
+                    _log.info("api.ticks_ressincronizados", extra={"campos": {"n": lidos}})
+                    continue
+                if tipo != "pmessage":
                     continue
                 try:
                     simbolo, n = de_payload(msg["data"])
