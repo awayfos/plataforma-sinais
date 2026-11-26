@@ -56,3 +56,48 @@ def espelhar(df: pd.DataFrame, k: float = 2000.0) -> pd.DataFrame:
         },
         index=df.index,
     )
+
+
+def de_barras(
+    c_barras: list[float] | np.ndarray,
+    por_barra: int = 5,
+    pavio: float = 0.2,
+    t0: int = T0,
+    pressao: float = 0.5,
+) -> pd.DataFrame:
+    """Expande barras (abertura = fechamento anterior) em ``por_barra`` candles de 1m cuja agregação
+    reproduz exatamente a barra: fechamentos interpolados, máxima no 2º minuto e mínima no 4º."""
+    cb = np.asarray(c_barras, dtype="float64")
+    ob = np.concatenate([[cb[0]], cb[:-1]])
+    linhas_c, linhas_h, linhas_l, linhas_o = [], [], [], []
+    for o, c in zip(ob, cb, strict=True):
+        fech = o + (c - o) * np.arange(1, por_barra + 1) / por_barra
+        aber = np.concatenate([[o], fech[:-1]])
+        h = np.maximum(aber, fech) + 0.01
+        lo = np.minimum(aber, fech) - 0.01
+        h[1 % por_barra] = max(o, c) + pavio
+        lo[3 % por_barra] = min(o, c) - pavio
+        linhas_c.append(fech)
+        linhas_o.append(aber)
+        linhas_h.append(h)
+        linhas_l.append(lo)
+    return minutos(
+        np.concatenate(linhas_c),
+        h=np.concatenate(linhas_h),
+        lo=np.concatenate(linhas_l),
+        o=np.concatenate(linhas_o),
+        pressao=pressao,
+        t0=t0,
+    )
+
+
+def anexar(
+    df: pd.DataFrame, o: float, h: float, lo: float, c: float, p: float = 0.5
+) -> pd.DataFrame:
+    """Acrescenta um candle de 1m ao fim."""
+    t = int(df.index[-1]) + M
+    linha = pd.DataFrame(
+        {"o": [o], "h": [h], "l": [lo], "c": [c], "v": [10.0], "vb": [10.0 * p]},
+        index=pd.Index([t], name="abertura"),
+    )
+    return pd.concat([df, linha])

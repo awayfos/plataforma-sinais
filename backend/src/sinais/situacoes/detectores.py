@@ -15,12 +15,22 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
-from sinais.analise.estrutura import pivos
+from sinais.analise import padroes_candle as pc
+from sinais.analise.estrutura import estrutura, pivos
+from sinais.analise.indicadores import adx, rsi
 from sinais.situacoes.base import Base
 from sinais.situacoes.eventos import evento
-from sinais.situacoes.parametros import MINUTO_MS, ParamS1, ParamS2, ParamS3
+from sinais.situacoes.parametros import (
+    MINUTO_MS,
+    ParamS1,
+    ParamS2,
+    ParamS3,
+    ParamS4,
+    ParamS5,
+)
 from sinais.situacoes.zonas import Zonas
 
 Linha = dict[str, Any]
@@ -204,4 +214,111 @@ def detectar_s3(
                 cand = [r for r in romp.get(i, []) if r.lado == lado and r.toques >= p.toques_min]
                 if forca and cand:
                     pendentes[lado] = (i, _melhor(cand, c[i]), False)
+    return saida
+
+
+# ---------------------------------------------------------------- 5m (S4, S5)
+
+
+def _blocos_novos(idx: np.ndarray) -> np.ndarray:
+    """``novo[i]`` = posição do bloco que acabou de fechar no candle ``i`` (ou −1)."""
+    anterior = np.concatenate([[-1], idx[:-1]])
+    return np.where((idx >= 0) & (idx != anterior), idx, -1)
+
+
+def detectar_s4(base: Base, p: ParamS4, nome: str = "S4") -> list[Linha]:
+    e = estrutura(base.q5.df, p.k_pivo_5m)
+    bos = e["bos"].to_numpy()
+    topo, fundo = e["ultimo_topo"].to_numpy(), e["ultimo_fundo"].to_numpy()
+    eng = pc.engolfo(base.df).to_numpy()
+    pin = pc.pin_bar(base.df).to_numpy()
+    novo = _blocos_novos(base.idx5)
+    c, h, lo, a, d = base.c, base.h, base.l, base.atr1, base.decisao
+    janela = p.janela_min * MINUTO_MS
+    # lado → (nível rompido, fim da janela, já se afastou)
+    setups: dict[int, tuple[float, int, bool]] = {}
+    saida: list[Linha] = []
+    for i in range(len(c)):
+        for lado, (nivel, fim, saiu) in list(setups.items()):
+            perto = p.proximidade_atr * a[i]
+            if d[i] > fim or math.isnan(perto):
+                del setups[lado]
+                continue
+            if (lado == 1 and c[i] < nivel) or (lado == -1 and c[i] > nivel):
+                del setups[lado]
+                continue
+            if lado == 1:
+                volta = lo[i] <= nivel + perto
+                rejeita = eng[i] == 1 or pin[i] == 1
+                longe = lo[i] > nivel + perto
+            else:
+                volta = h[i] >= nivel - perto
+                rejeita = eng[i] == -1 or pin[i] == -1
+                longe = h[i] < nivel - perto
+            if saiu and volta and rejeita:
+                espelho = "topo" if lado == 1 else "fundo"
+                saida.append(evento(d[i], nome, "S4", espelho, nivel=nivel))
+                del setups[lado]
+                continue
+            setups[lado] = (nivel, fim, saiu or longe)
+        j = novo[i]
+        if j >= 0 and bos[j] != 0:
+            lado = int(bos[j])
+            nivel = float(topo[j] if lado == 1 else fundo[j])
+            setups[lado] = (nivel, int(base.q5.fech[j]) + janela, False)
+    return saida
+
+
+def _pivos_conhecidos(valores: np.ndarray, k: int) -> list[tuple[int, int]]:
+    """(linha de confirmação, candle do pivô) em ordem."""
+    return [(int(j), int(j) - k) for j in np.flatnonzero(~np.isnan(valores))]
+
+
+def detectar_s5(base: Base, p: ParamS5, nome: str = "S5") -> list[Linha]:
+    q5 = base.q5
+    e = estrutura(q5.df, p.k_pivo_5m)
+    choch = e["choch"].to_numpy()
+    pv = pivos(q5.df, p.k_pivo_5m)
+    topos, fundos = pv["topo"].to_numpy(), pv["fundo"].to_numpy()
+    r = rsi(q5.df["c"]).to_numpy(dtype="float64") if len(q5.df) else np.zeros(0)
+    a15 = (
+        adx(base.q15.df)
+        if len(base.q15.df)
+        else pd.DataFrame(columns=["adx", "mais_di", "menos_di"])
+    )
+    adx15 = a15["adx"].to_numpy(dtype="float64")
+    mais, menos = (
+        a15["mais_di"].to_numpy(dtype="float64"),
+        a15["menos_di"].to_numpy(dtype="float64"),
+    )
+    conf_t = _pivos_conhecidos(topos, p.k_pivo_5m)
+    conf_f = _pivos_conhecidos(fundos, p.k_pivo_5m)
+    novo = _blocos_novos(base.idx5)
+    saida: list[Linha] = []
+
+    def ultimos(conf: list[tuple[int, int]], j: int) -> list[int]:
+        return [piv for linha, piv in conf if linha <= j][-2:]
+
+    for i in np.flatnonzero(novo >= 0):
+        j = int(novo[i])
+        lado = int(choch[j])
+        k15 = int(base.idx15[i])
+        if lado == 0 or k15 < 0 or not _ge(adx15[k15], p.adx_min):
+            continue
+        if lado == -1:  # quebra para baixo após alta: topos mais altos com RSI menor
+            if not mais[k15] > menos[k15]:
+                continue
+            ps = ultimos(conf_t, j)
+            valores = topos
+            ok = len(ps) == 2 and q5.h[ps[1]] > q5.h[ps[0]] and _lt(r[ps[1]], r[ps[0]])
+        else:
+            if not menos[k15] > mais[k15]:
+                continue
+            ps = ultimos(conf_f, j)
+            valores = fundos
+            ok = len(ps) == 2 and q5.l[ps[1]] < q5.l[ps[0]] and _gt(r[ps[1]], r[ps[0]])
+        if ok and j - ps[1] <= p.idade_max_pivo_5m:
+            nivel = float(valores[ps[1] + p.k_pivo_5m])
+            espelho = "topo" if lado == -1 else "fundo"
+            saida.append(evento(base.decisao[i], nome, "S5", espelho, nivel=nivel))
     return saida
