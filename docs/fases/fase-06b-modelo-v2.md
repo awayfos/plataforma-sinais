@@ -121,6 +121,8 @@ Se qualquer item mudar, a rodada deixa de ser confirmatória e precisa de outros
 
 **Nota operacional (acrescentada depois do diagnóstico, sem mudar a configuração avaliada):** a rodada principal com os dois diagnósticos chegou a 6,8 GB de pico. Com 27 meses, a confirmatória deve rodar com `--sem-ablacao-fs1`. Essa opção só desliga o diagnóstico `fs-1` e não muda o candidato. A rodada de sensibilidade, com essa opção e 24 meses, ficou em 5,9 GB.
 
+**Emenda A (2026-11-26, antes de existir qualquer dado dos meses novos):** a rodada confirmatória ganha uma **segunda família**, separada e declarada: BTCUSDT e ETHUSDT × **15m e 30m**, com exatamente a mesma configuração da tabela acima (código, entrada + 2..+10 s, tolerância de 0,5 × ATR, walk-forward, critérios, payout 0,86) e Benjamini-Hochberg sobre essas 4 combinações. Motivo: 15m é a expiração preferida do cliente e, na Fase 6 (entrada no preço de 1m), o ETH 15m chegou a 55,11% (Wilson inferior 54,37%) e o BTC 15m a 54,86%, sem passar; nenhuma rodada com 1 s e entrada rápida foi feita nessas expirações, então nenhum número desta configuração foi visto. A família 1m/5m acima não muda. Pendência de código antes da execução: opção de CLI para escolher as expirações avaliadas (hoje fixas em 1m e 5m), sem alterar nada do candidato.
+
 ## 8. Diagnóstico de sensibilidade (sem direito a aprovação)
 
 Rodada "sensibilidade" do run 45760895573: a configuração pré-registrada na seção 7 (entrada entre a decisão + 2 s e + 10 s, tolerância de 0,5 × ATR) sobre os mesmos 24 meses. **Ela não aprova nada.** Esses meses e o holdout já foram vistos, e a configuração só pode ser aprovada na confirmatória.
