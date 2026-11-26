@@ -118,3 +118,23 @@ def test_igual_ao_simulador_da_fase_6b_com_entrada_deterministica() -> None:
     assert len(comparaveis) > 20
     assert (comparaveis["resultado"] == comparaveis["resultado_6b"]).all()
     assert (comparaveis["preco_entrada"] == comparaveis["preco_entrada_6b"]).all()
+
+
+def test_sobreposicao_aplicada_depois_igual_a_simulacao_direta() -> None:
+    from sinais.situacoes.simulacao import aplicar_sobreposicao
+
+    p = _precos(6 * 3600, semente=9)
+    d = [int(x) for x in T0 + np.arange(0, 330, 2) * M]
+    atr = _atr(d, 0.05)
+    direto = simular_eventos(_eventos(d), p, R15, atr)
+    independente = simular_eventos(_eventos(d), p, R15, atr, sem_sobreposicao=False)
+    assert (independente["resultado"] != "IGNORADO_ATIVO").all()
+    depois = aplicar_sobreposicao(independente)
+    pd.testing.assert_frame_equal(direto, depois)
+    assert (depois["resultado"] == "IGNORADO_ATIVO").sum() > 10
+    # subconjunto (ex.: só os sinais liberados pela camada B) = simular só esse subconjunto
+    sub = d[::3]
+    pd.testing.assert_frame_equal(
+        aplicar_sobreposicao(independente[independente["decisao"].isin(sub)]),
+        simular_eventos(_eventos(sub), p, R15, _atr(sub, 0.05)),
+    )

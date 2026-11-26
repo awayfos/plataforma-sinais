@@ -94,17 +94,10 @@ def simular_eventos(
     resultado[afastou] = "FORA_DA_TOLERANCIA"
     resultado[np.isnan(p_ent) | np.isnan(p_venc)] = "SEM_DADO"
     resultado[~dentro] = "FORA_DA_JANELA"
-    if sem_sobreposicao:
-        ativo_ate = np.iinfo("int64").min
-        for k in range(len(d)):
-            if d[k] < ativo_ate:
-                resultado[k] = "IGNORADO_ATIVO"
-            elif resultado[k] in LIQUIDADAS:
-                ativo_ate = int(alvo[k])
     liquidada = np.isin(resultado, LIQUIDADAS)
     with np.errstate(invalid="ignore"):
         apertado = np.abs(p_venc - p_ent) <= execucao.limiar_apertado * p_ent
-    return pd.DataFrame(
+    ops = pd.DataFrame(
         {
             "decisao": d,
             "direcao": direcao,
@@ -121,3 +114,31 @@ def simular_eventos(
         },
         columns=COLUNAS_OPERACAO,
     )
+    return aplicar_sobreposicao(ops) if sem_sobreposicao else ops
+
+
+def aplicar_sobreposicao(ops: pd.DataFrame) -> pd.DataFrame:
+    """Um sinal ativo por vencimento sobre operações simuladas uma a uma
+    (``sem_sobreposicao=False``).
+    Como cada evento é simulado de forma independente, aplicar a regra depois dá o mesmo resultado
+    que simular só o subconjunto (ex.: os sinais liberados pela camada B)."""
+    ops = ops.sort_values("decisao", kind="stable").reset_index(drop=True)
+    d = ops["decisao"].to_numpy(dtype="int64")
+    alvo = ops["vencimento_t"].to_numpy(dtype="int64")
+    resultado = ops["resultado"].to_numpy(dtype=object).copy()
+    ignorado = np.zeros(len(ops), dtype="bool")
+    ativo_ate = np.iinfo("int64").min
+    for k in range(len(d)):
+        if d[k] < ativo_ate:
+            ignorado[k] = True
+        elif resultado[k] in LIQUIDADAS:
+            ativo_ate = int(alvo[k])
+    if not ignorado.any():
+        return ops
+    ops = ops.copy()
+    resultado[ignorado] = "IGNORADO_ATIVO"
+    ops["resultado"] = resultado.astype(str)
+    for col in ("preco_entrada", "preco_vencimento"):
+        ops.loc[ignorado, col] = np.nan
+    ops.loc[ignorado, "apertado"] = False
+    return ops
