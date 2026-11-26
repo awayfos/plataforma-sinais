@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatarDuracao, formatarHora, formatarPercentual, formatarPreco } from "@/lib/formato";
+import { formatarContagemVela, formatarDuracao, formatarHora, formatarPercentual, formatarPreco } from "@/lib/formato";
 
 describe("formato (pt-BR)", () => {
   it("preço em string decimal sem perder precisão", () => {
@@ -21,6 +21,15 @@ describe("formato (pt-BR)", () => {
     expect(formatarDuracao(85_000)).toBe("1:25");
     expect(formatarDuracao(3_723_000)).toBe("1:02:03");
     expect(formatarDuracao(-5)).toBe("0:00");
+  });
+
+  it("contagem até o fechamento do candle (rótulo do eixo de preço)", () => {
+    expect(formatarContagemVela(37_000)).toBe("00:37");
+    expect(formatarContagemVela(36_100)).toBe("00:37");
+    expect(formatarContagemVela(14 * 60_000 + 5_000)).toBe("14:05");
+    expect(formatarContagemVela(3 * 3_600_000 + 61_000)).toBe("03:01:01");
+    expect(formatarContagemVela(2 * 86_400_000 + 3_600_000)).toBe("2d 01:00");
+    expect(formatarContagemVela(-1)).toBe("00:00");
   });
 
   it("hora em Brasília", () => {

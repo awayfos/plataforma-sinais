@@ -56,6 +56,15 @@ describe("ClienteTempoReal", () => {
     expect(candles).not.toHaveBeenCalled();
   });
 
+  it("o ouvinte recebe o canal de origem junto com os dados", () => {
+    const { cliente, sockets } = montar();
+    const f = vi.fn();
+    cliente.assinar("candles:BTCUSDT:1m", f);
+    sockets[0]!.abrir();
+    sockets[0]!.receber({ canal: "candles:BTCUSDT:1m", dados: { t: 1 } });
+    expect(f).toHaveBeenCalledWith({ t: 1 }, "candles:BTCUSDT:1m");
+  });
+
   it("cancela o canal quando o último ouvinte sai", () => {
     const { cliente, sockets } = montar();
     const sair = cliente.assinar("analise:BTCUSDT", () => {});

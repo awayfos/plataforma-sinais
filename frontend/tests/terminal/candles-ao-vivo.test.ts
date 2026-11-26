@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { legendaVisivel, mesclarCandle, tempoDoGrafico } from "@/lib/candles";
+import { duracaoTempo, legendaVisivel, mesclarCandle, tempoDoGrafico } from "@/lib/candles";
 
 const c = (t: number, close: string) => ({ t, o: "1", h: "2", l: "0.5", c: close, v: "10" });
 
@@ -32,6 +32,14 @@ describe("tempoDoGrafico", () => {
   it("1d e 1w não deslocam (senão a barra cai no dia anterior)", () => {
     expect(tempoDoGrafico(meiaNoite, "1d")).toBe(meiaNoite / 1000);
     expect(tempoDoGrafico(meiaNoite, "1w")).toBe(meiaNoite / 1000);
+  });
+});
+
+describe("duracaoTempo", () => {
+  it("duração de cada tempo gráfico em ms", () => {
+    expect(duracaoTempo("1m")).toBe(60_000);
+    expect(duracaoTempo("4h")).toBe(4 * 3_600_000);
+    expect(duracaoTempo("1w")).toBe(7 * 86_400_000);
   });
 });
 

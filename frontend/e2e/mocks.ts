@@ -72,6 +72,8 @@ export async function entrarComCookie(context: BrowserContext) {
 
 export interface OpcoesBackend {
   usuario?: Record<string, unknown>;
+  /** Ticks do candle em formação enviados a cada 100 ms após o snapshot (todos no mesmo t). */
+  ticks?: number;
   statusEu?: number;
   aoChamar?: (metodo: string, caminho: string, corpo: unknown) => void;
 }
@@ -129,13 +131,29 @@ export async function simularBackend(page: Page, opcoes: OpcoesBackend = {}) {
     ws.onMessage((mensagem) => {
       const msg = JSON.parse(String(mensagem)) as { acao: string; canal: string };
       if (msg.acao === "assinar" && msg.canal.startsWith("candles:")) {
-        const ultimo = candles.at(-1)!;
+        const t = candles.at(-1)!.t + 60_000;
+        // Snapshot imediato do candle em formação.
         ws.send(
           JSON.stringify({
             canal: msg.canal,
-            dados: { t: ultimo.t + 60_000, o: "43300.00", h: "43320.00", l: "43290.00", c: "43300.50", v: "3.2", fechado: false },
+            dados: { t, o: "43300.00", h: "43320.00", l: "43290.00", c: "43300.50", v: "3.2", fechado: false },
           }),
         );
+        let i = 0;
+        const total = opcoes.ticks ?? 0;
+        if (total > 0) {
+          const id = setInterval(() => {
+            i += 1;
+            const c = (43300 + i * 0.5).toFixed(2);
+            ws.send(
+              JSON.stringify({
+                canal: msg.canal,
+                dados: { t, o: "43300.00", h: (43320 + i * 0.5).toFixed(2), l: "43290.00", c, v: (3.2 + i * 0.1).toFixed(1), fechado: false },
+              }),
+            );
+            if (i >= total) clearInterval(id);
+          }, 100);
+        }
       }
     });
   });
