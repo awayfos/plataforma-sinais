@@ -1420,6 +1420,17 @@
           "assinatura": {
             "$ref": "#/components/schemas/AssinaturaUsuario"
           },
+          "assinatura_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assinatura Id"
+          },
           "criado_em": {
             "title": "Criado Em",
             "type": "integer"
@@ -3515,18 +3526,25 @@
     },
     "/api/sinais/historico": {
       "get": {
-        "description": "Sinais emitidos e liquidados. Vazio até o motor de sinais ao vivo gravar o primeiro.",
+        "description": "Sinais emitidos e liquidados. Sem ``simbolo``: todos os ativos do plano do usuário.\nVazio até o motor de sinais ao vivo gravar o primeiro.",
         "operationId": "historico_api_sinais_historico_get",
         "parameters": [
           {
             "in": "query",
             "name": "simbolo",
-            "required": true,
+            "required": false,
             "schema": {
-              "maxLength": 32,
-              "minLength": 1,
-              "title": "Simbolo",
-              "type": "string"
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Simbolo"
             }
           },
           {
