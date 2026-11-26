@@ -126,7 +126,7 @@ Revisão do autor sobre o branch inteiro (sem revisor independente nesta sessão
 | Segredos em log | Logs de acesso guardam evento, usuário, IP e user agent. Auditoria sem hash/senha/TOTP (teste). Configuração nomeia a variável e nunca o valor. Erro 500 loga só o tipo da exceção. |
 | Enumeração de contas | Mesma resposta, mesmo bloqueio e mesmo custo de hash para e-mail inexistente (teste). |
 | WebSocket entre sites (CSWSH) | Origin precisa ser o próprio host ou estar em `SINAIS_ORIGENS_PERMITIDAS`. |
-| IP atrás de proxy | Corrigido na revisão: com `SINAIS_CONFIAR_PROXY=true` vale a **última** entrada de `X-Forwarded-For` (a primeira é forjável). |
+| IP atrás de proxy | `SINAIS_PROXIES_CONFIAVEIS` (CIDRs): o `X-Forwarded-For` só é lido de proxies confiáveis, da direita para a esquerda, pulando os proxies. Ver "Passe de correções". |
 | Números inventados no resumo | Impossível por construção e verificado por teste em cinco cenários. |
 | Look-ahead na análise ao vivo | O motor usa o mesmo `montar_snapshot` do laboratório sobre candles fechados do banco. |
 
@@ -156,6 +156,57 @@ Pedidos em `docs/fases/fase-09-frontend.md` §3 (branch `plataforma-frontend`), 
 4. `GET /api/eu`, `POST /api/eu/senha` e `POST /api/auth/logout` funcionam com assinatura vencida (só 401 sem sessão, nunca 402). Já era assim; agora há teste específico.
 5. `PATCH /api/admin/planos` com o plano inteiro (incluindo `id`) no corpo, além de `PATCH /api/admin/planos/{id}`; `id` do corpo diferente do da rota → 422.
 6. Payout sempre em fração (0,86), `0 < payout <= 1`.
+
+## Passe de correções da revisão de segurança (PR #14, base `1cea77e`)
+
+Cada correção tem teste que falhou antes (unitário com dublê que intercala as chamadas, ou integração com PostgreSQL/Redis reais).
+
+| # | Problema | Correção | Teste |
+|---|---|---|---|
+| 1 | Escrita da linha inteira com fotografia antiga ressuscitava sessão revogada, desbloqueava usuário ou desfazia troca de senha; TOTP reusado em paralelo; dois logins simultâneos com limite 1 | `tocar_sessao`/`revogar_sessao` com `WHERE revogada_em IS NULL`; `atualizar_usuario` só com as colunas pedidas; `atualizar_preferencias`; `registrar_passo_totp` condicional (`totp_ultimo_passo < :p`, exatamente 1 linha); limite de sessões aplicado **depois** de gravar a nova, com ordem determinística (`criada_em`, `seq`) | `test_concorrencia.py` (5 casos), contratos de repositório, `test_concorrencia_real_no_postgres` |
+| 2 | Argon2 no laço de eventos | `asyncio.to_thread` + semáforo (`hash_paralelo`, padrão 4) | `test_hash_de_senha_roda_fora_do_laco_e_com_limite_de_paralelismo` |
+| 3 | Bloqueio só por e-mail deixava qualquer um travar um admin | Bloqueio progressivo por (e-mail, IP) + teto global por e-mail (50 falhas/h → 15 min), sem enumeração | `test_atacante_de_outro_ip_nao_bloqueia_o_dono_da_conta`, `test_teto_global_por_email_...` |
+| 4 | WS mantinha canal de ativo que saiu do plano | A cada verificação periódica, cancela o canal e envia o quadro de erro | `test_plano_reduzido_durante_a_conexao_cancela_o_canal_do_ativo` |
+| 5 | Implantação atrás de Next/nginx | `SINAIS_PROXIES_CONFIAVEIS` (CIDRs, XFF pela direita); `Origin` do WS só por `SINAIS_ORIGENS_PERMITIDAS` (e `X-Forwarded-Host` só de proxy confiável); com `SINAIS_AMBIENTE=prod` as origens são obrigatórias e a chave do `.env.example` é recusada; padrão de dev aceita `http://localhost:3000` | `test_ip_do_cliente_anda_no_x_forwarded_for_...`, `test_origem_permitida_...`, `test_producao_exige_origens_...` |
+| 6 | Fonte de eventos do WS morria calada; `campeao.json` malformado | Tarefas de fundo supervisionadas (reinício com log); entrada ruim do stream registrada e pulada; registro malformado → AGUARDAR com log | `test_supervisor_...`, `test_entrada_ruim_no_stream_...`, `test_campeao_malformado_cai_para_aguardar` |
+| 7 | Motor travava num lote envenenado | Evento malformado → fila morta `candle.fechado.mortos` + ACK; falha de cálculo só reenvia o símbolo afetado; XPENDING/XCLAIM com no máximo 5 entregas; consumidor por `SINAIS_CONSUMIDOR` ou host | `test_evento_envenenado_...`, `test_falha_de_calculo_...`, `test_pendentes_...`, `test_nome_do_consumidor_...` |
+| 8 | Admin não conseguia encerrar assinatura antes do fim | `POST /api/admin/assinaturas/{id}/encerrar` (auditado, vale na hora) | `test_encerrar_assinatura_...`, `test_admin_encerra_assinatura_...` |
+
+Menores corrigidos: cabeçalhos de segurança também no 500; AES-GCM com dado associado `usuario:{id}` e prefixo de chave `k1:`; e-mail tomado entre checagem e gravação → 409; limite de 5 trocas de senha por sessão em 15 min (429); volume do registro de modelos no Compose; resumo diz "Sem dados de tendência em …" quando falta histórico e nunca escreve distância negativa; rótulos de expiração num lugar só (`core.dominio.ROTULOS_EXPIRACAO`); layout aninhado demais e corpo ilegível → 422; candles de 3m a 1w com os minutos disponíveis e só períodos fechados (uma lacuna não some com o 1d ou 1w inteiro); migração com `ondelete` explícito, CHECK de expiração e vigência, índice único do payout vigente, índice de expiração das sessões e teste de downgrade. CI verde em `de91891`.
+
+## Gráfico ao vivo tick a tick (1m a 1w)
+
+- `processos/ticks_binance.py` (serviço `ticks`): stream combinado `<simbolo>@aggTrade` com o mesmo consumidor do coletor (reconexão com backoff, renovação antes de 24 h). Publica cada negócio no Redis Pub/Sub `ticks:{SIMBOLO}` (não grava nada; os candles persistidos continuam vindo só dos klines fechados). Em toda (re)conexão, antes de ler o stream, republica pelo REST (`/api/v3/aggTrades`) os negócios do minuto atual.
+- `dados/vela_formacao.py` (puro): para cada tempo gráfico, período atual = minutos de 1m oficiais (do banco, desde o início da semana) + negócios dos minutos abertos, cada um no minuto do seu `T`; primeiro/último pelo id do aggTrade (ordem de chegada não importa), repetidos descartados; o 1m oficial substitui o parcial e negócios com `T` anterior ao fim dele são descartados; lacuna de fechamentos → recarga do banco.
+- `api/velas.py`: publica `candles:SIMBOLO:TG` com `fechado: false` e `preco:SIMBOLO`, no máximo uma mensagem por canal a cada 100 ms (último valor vence), só nos canais com assinantes; foto imediata na assinatura. O `fechado: true` continua saindo do `candle.fechado`.
+
+Prova "igual à Binance" (job `ticks` do CI, run 45816490550, 3 minutos reais, igualdade exata de `Decimal`):
+
+```
+BTCUSDT: 2500 aggTrades, 4 velas, igual=True
+ETHUSDT: 925 aggTrades, 4 velas, igual=True
+| BTCUSDT | 1m | 1795694820000 | 60841.98/60864.28/60826.00/60832.30/6.90410 | (igual na Binance) | sim |
+| BTCUSDT | 1m | 1795694880000 | 60832.30/60832.31/60791.54/60800.00/10.11403 | (igual) | sim |
+| BTCUSDT | 1m | 1795694940000 | 60800.01/60800.12/60772.33/60794.19/9.20856 | (igual) | sim |
+| BTCUSDT | 5m | 1795694700000 | 60875.43/60875.43/60772.33/60794.19/39.30907 | (igual) | sim |
+| ETHUSDT | 1m | 1795694820000 | 1705.98/1706.96/1705.46/1705.88/90.954 | (igual) | sim |
+| ETHUSDT | 1m | 1795694880000 | 1705.87/1705.88/1704.55/1704.67/43.3935 | (igual) | sim |
+| ETHUSDT | 1m | 1795694940000 | 1704.67/1706.11/1704.06/1706.11/204.4395 | (igual) | sim |
+| ETHUSDT | 5m | 1795694700000 | 1707.49/1707.49/1704.06/1706.11/466.6057 | (igual) | sim |
+{"igual": true}
+```
+
+Na mesma run: backend 459 passed, 31 skipped (cobertura 97,28%), integracao 31 passed, fumaça com "ticks recebidos em 15 s: 157". Testes unitários: negócio exatamente na abertura, fora de ordem e repetido, ressincronização sem duplicar, reconciliação, lacuna com recarga, virada da semana (segunda 00:00 UTC), vazão coalescida, foto na assinatura.
+
+## Acréscimos ao contrato (texto proposto)
+
+- **WebSocket, quadros de erro:** `{"canal": "<canal>", "erro": {"codigo", "mensagem"}}` (ex.: `ativo_nao_incluido`, `limite_canais`) e `{"erro": {"codigo": "mensagem_invalida", "mensagem"}}`. O frontend pode ignorar quadros com `erro`.
+- **WebSocket, fechamento:** 4401 sessão revogada/expirada, 4402 assinatura vencida, **4403** origem não permitida.
+- **`candles:SIMB:TG`:** `{t, o, h, l, c, v, fechado}`; `fechado: false` = vela em formação, tick a tick, no máximo 1 mensagem por canal a cada 100 ms (coalescida, último valor vence); `fechado: true` no fechamento oficial. Ao assinar, uma foto imediata da vela em formação (se houver negócio).
+- **`preco:SIMB`** (novo): `{preco: string decimal, t: int ms}`, mesmas regras de vazão, foto na assinatura e checagem de plano.
+- **`POST /api/admin/assinaturas/{id}/encerrar`** → `200 Assinatura` com `fim = agora` (nunca estica uma já encerrada); `404 assinatura_inexistente`.
+- **Códigos:** `409 email_em_uso`, `409 plano_existente`, `404 ativo_desconhecido`, `404 analise_indisponivel`, `404 usuario_inexistente`, `404 plano_inexistente`, `404 assinatura_inexistente`, `429 muitas_tentativas` também em `POST /api/eu/senha`.
+- **Candles de 3m a 1w:** agregados com os minutos disponíveis, só períodos fechados.
 
 ## Não feito nesta entrega
 

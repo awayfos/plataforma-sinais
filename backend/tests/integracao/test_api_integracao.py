@@ -18,7 +18,8 @@ from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
-from sinais.api.eventos_redis import fonte_redis  # noqa: E402
+from sinais.api.eventos_redis import fonte_redis, fonte_ticks  # noqa: E402
+from sinais.api.velas import GestorVelas  # noqa: E402
 from sinais.eventos.contratos import (  # noqa: E402
     STREAM_ANALISE_ATUALIZADA,
     evento_analise_atualizada,
@@ -27,6 +28,7 @@ from sinais.persistencia.analises import ArmazemAnalisesRedis  # noqa: E402
 from sinais.persistencia.consultas_mercado import ConsultasMercadoPg  # noqa: E402
 from sinais.persistencia.limites_redis import ContadorRedis  # noqa: E402
 from sinais.persistencia.repositorio_contas_pg import RepositorioContasPg  # noqa: E402
+from sinais.persistencia.repositorio_pg import RepositorioCandlesPg  # noqa: E402
 from sinais.processos.motor_analise import montar_analise  # noqa: E402
 
 from ..unit.api.apoio import App, montar  # noqa: E402
@@ -98,6 +100,17 @@ def amb() -> Iterator[Ambiente]:
         analises=ArmazemAnalisesRedis(redis),
     )
     app.servicos.fonte_eventos = fonte_redis(redis, bloqueio_ms=100)
+    velas = GestorVelas(
+        ["BTCUSDT", "ETHUSDT"],
+        RepositorioCandlesPg(engine),
+        app.amb.relogio,
+        app.servicos.distribuidor,
+    )
+    app.servicos.velas = velas
+    app.servicos.tarefas = [
+        ("velas", lambda: velas.executar(0.05)),
+        ("ticks", fonte_ticks(redis, velas)),
+    ]
     with app.cliente() as c:
         a = Ambiente(app, c, redis)
         a.chamar(limpar_contas, engine)
@@ -213,3 +226,36 @@ def test_fan_out_do_redis_streams_ate_o_websocket(amb: Ambiente) -> None:
         assert [s["expiracao"] for s in recebidas["sinais:BTCUSDT"]] == ["1m", "5m"]
     amb.chamar(amb.app.analises.salvar, "BTCUSDT", texto)
     assert amb.pedir("so_btc", "GET", "/api/analise?simbolo=BTCUSDT").json() == json.loads(texto)
+
+
+def test_tick_do_pubsub_chega_ao_websocket_como_vela_em_formacao(amb: Ambiente) -> None:
+    import time
+    from decimal import Decimal
+
+    from sinais.dados.negocios import canal_ticks, para_payload
+    from sinais.dados.vela_formacao import Negocio
+
+    h = amb.cabecalhos("so_btc")
+    amb.c.cookies.clear()
+    with amb.c.websocket_connect("/api/ws", headers=h) as ws:
+        ws.send_json({"acao": "assinar", "canal": "candles:BTCUSDT:1m"})
+        n = Negocio(77, Decimal("61000.5"), Decimal("0.25"), T0 + 1234, False)
+        recebida = None
+        for _ in range(50):  # o Pub/Sub só entrega depois que a assinatura ficou ativa
+            amb.chamar(amb.redis.publish, canal_ticks("BTCUSDT"), para_payload("BTCUSDT", n))
+            time.sleep(0.1)
+            if amb.app.servicos.velas and amb.app.servicos.velas.snapshot("candles:BTCUSDT:1m"):
+                recebida = ws.receive_json()
+                break
+        assert recebida == {
+            "canal": "candles:BTCUSDT:1m",
+            "dados": {
+                "t": T0,
+                "o": "61000.5",
+                "h": "61000.5",
+                "l": "61000.5",
+                "c": "61000.5",
+                "v": "0.25",
+                "fechado": False,
+            },
+        }
