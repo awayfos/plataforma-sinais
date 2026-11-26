@@ -97,3 +97,81 @@ jobs:
           sed -i 's#^SINAIS_HISTORICO_DIAS=.*#SINAIS_HISTORICO_DIAS=1#' .env.ci
           sed -i 's#^SINAIS_HISTORICO_DIAS_1S=.*#SINAIS_HISTORICO_DIAS_1S=1#' .env.ci
       - run: ENV_FILE=.env.ci infra/fumaca.sh
+
+  e2e-real:
+    # Ponta a ponta REAL, sem simulação: Chromium → Next (next build + next start; rewrite de /api e do
+    # WebSocket) → API FastAPI → Redis (Pub/Sub ticks:* e streams) → coletor/ticks/motor_analise → Binance.
+    # O backend sobe com o mesmo script do desenvolvimento local (infra/dev.sh).
+    runs-on: ubuntu-latest
+    needs: [backend, integracao, infra]
+    timeout-minutes: 45
+    env:
+      ENV_FILE: .env.e2e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ambiente de teste (.env.e2e a partir do .env.example)
+        run: |
+          cp .env.example .env.e2e
+          sed -i 's#^SINAIS_BINANCE_REST_URL=.*#SINAIS_BINANCE_REST_URL=https://data-api.binance.vision#' .env.e2e
+          sed -i 's#^SINAIS_HISTORICO_DIAS=.*#SINAIS_HISTORICO_DIAS=1#' .env.e2e
+          sed -i 's#^SINAIS_HISTORICO_DIAS_1S=.*#SINAIS_HISTORICO_DIAS_1S=1#' .env.e2e
+          sed -i 's#^SINAIS_ORIGENS_PERMITIDAS=.*#SINAIS_ORIGENS_PERMITIDAS=http://localhost:3100#' .env.e2e
+      - name: Backend real (infra/dev.sh subir)
+        run: infra/dev.sh subir
+      - name: Admin semeado com 2FA (o teste calcula o TOTP)
+        run: |
+          senha="e2e-admin-$(openssl rand -hex 8)"
+          echo "::add-mask::$senha"
+          uri=$(SINAIS_ADMIN_SENHA="$senha" infra/dev.sh admin admin@e2e.local "Admin E2E" | grep '^otpauth://')
+          segredo=$(printf '%s' "$uri" | sed -E 's/.*secret=([A-Z2-7]+).*/\1/')
+          echo "::add-mask::$segredo"
+          {
+            echo "SINAIS_E2E_EMAIL=admin@e2e.local"
+            echo "SINAIS_E2E_SENHA=$senha"
+            echo "SINAIS_E2E_TOTP=$segredo"
+          } >> "$GITHUB_ENV"
+      - name: Espera candles no banco e ticks no Pub/Sub
+        run: |
+          C="docker compose -f infra/docker-compose.yml --env-file .env.e2e"
+          n=0
+          for _ in $(seq 1 600); do
+            n=$($C exec -T db psql -U sinais -d sinais -tAc "SELECT count(*) FROM candles_1m" 2>/dev/null | tr -d '[:space:]' || true)
+            [ "${n:-0}" -gt 200 ] && break
+            sleep 1
+          done
+          echo "candles_1m=$n"
+          [ "${n:-0}" -gt 200 ] || { echo "FALHOU: histórico não chegou"; exit 1; }
+          ticks=$( (timeout 15 $C exec -T redis redis-cli PSUBSCRIBE 'ticks:*' || true) | grep -c '"preco"' || true)
+          echo "ticks em 15 s: $ticks"
+          [ "${ticks:-0}" -gt 0 ] || { echo "FALHOU: nenhum tick no Pub/Sub"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: next build
+        working-directory: frontend
+        run: npm run build
+      - name: Chromium do Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Playwright contra o backend real (next start)
+        working-directory: frontend
+        env:
+          CI: "1"
+        run: npx playwright test -c playwright.real.config.ts
+      - name: Logs do backend
+        if: always()
+        run: docker compose -f infra/docker-compose.yml --env-file .env.e2e logs --tail=150 api ticks coletor motor_analise
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-real
+          path: frontend/playwright-report-real
+          retention-days: 7
+      - name: Derruba o ambiente
+        if: always()
+        run: docker compose -f infra/docker-compose.yml --env-file .env.e2e down -v
