@@ -53,3 +53,37 @@ def test_producao_exige_origens_e_recusa_a_chave_de_exemplo() -> None:
     with pytest.raises(ErroConfiguracao) as e:
         carregar_configuracao_api({"SINAIS_AMBIENTE": "prod", "SINAIS_CHAVE_CIFRA": CHAVE})
     assert "SINAIS_ORIGENS_PERMITIDAS" in str(e.value)
+
+
+def test_producao_recusa_configuracoes_de_desenvolvimento() -> None:
+    base = {
+        "SINAIS_AMBIENTE": "prod",
+        "SINAIS_ORIGENS_PERMITIDAS": "https://app.exemplo.com",
+        "SINAIS_CHAVE_CIFRA": CHAVE,
+    }
+    casos = {
+        "SINAIS_COOKIE_SEGURO": {"SINAIS_COOKIE_SEGURO": "false"},
+        "SINAIS_DOCUMENTACAO": {"SINAIS_DOCUMENTACAO": "true"},
+        "SINAIS_ORIGENS_PERMITIDAS": {
+            "SINAIS_ORIGENS_PERMITIDAS": "https://app.exemplo.com,http://app.exemplo.com"
+        },
+    }
+    for variavel, extra in casos.items():
+        with pytest.raises(ErroConfiguracao) as e:
+            carregar_configuracao_api({**base, **extra})
+        assert variavel in str(e.value), variavel
+    # a mesma chave de exemplo escrita de outro jeito (o base64 ignora o que não é do alfabeto)
+    exemplo = "ZGVzZW52b2x2aW1lbnRvLW5hby11c2UtZW0tcHJvZCE="
+    for variante in (exemplo[:8] + "\n" + exemplo[8:], " " + exemplo):
+        with pytest.raises(ErroConfiguracao) as e:
+            carregar_configuracao_api({**base, "SINAIS_CHAVE_CIFRA": variante})
+        assert "SINAIS_CHAVE_CIFRA" in str(e.value)
+    # no desenvolvimento tudo isso continua permitido
+    dev = carregar_configuracao_api(
+        {
+            "SINAIS_CHAVE_CIFRA": exemplo,
+            "SINAIS_COOKIE_SEGURO": "false",
+            "SINAIS_DOCUMENTACAO": "true",
+        }
+    )
+    assert dev.cookie_seguro is False and dev.documentacao is True
