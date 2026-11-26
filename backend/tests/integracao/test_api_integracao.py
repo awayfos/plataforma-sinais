@@ -235,6 +235,8 @@ def test_tick_do_pubsub_chega_ao_websocket_como_vela_em_formacao(amb: Ambiente) 
     from sinais.dados.negocios import canal_ticks, para_payload
     from sinais.dados.vela_formacao import Negocio
 
+    # Sem verificação periódica no meio: o cliente fecha enquanto o servidor está ocioso.
+    amb.app.servicos.ws_verificacao_s = 30
     h = amb.cabecalhos("so_btc")
     amb.c.cookies.clear()
     with amb.c.websocket_connect("/api/ws", headers=h) as ws:
