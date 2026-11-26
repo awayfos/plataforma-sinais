@@ -18,7 +18,7 @@ def test_markdown_v2_tem_principal_apertados_holdout_e_diagnosticos() -> None:
     texto = gerar_markdown_v2(
         principal,
         {"fs-2 sem filtro": diag},
-        {("BTCUSDT", "1m"): ExtrasFiltro([0.3, math.inf], [0.25, 0.0])},
+        {("BTCUSDT", "1m"): ExtrasFiltro([0.3, math.inf], [0.25, 0.0], 0.4, 0.3)},
         {"fonte": "teste"},
     )
     assert "## Resultado do candidato (fs-2 + filtro de apertados)" in texto
@@ -26,6 +26,15 @@ def test_markdown_v2_tem_principal_apertados_holdout_e_diagnosticos() -> None:
     assert "**ligar**" in texto
     assert "fs-2 sem filtro" in texto
     assert "sem direito a aprovação" in texto
-    assert "12.50%" in texto  # fração média cortada pelo filtro
-    assert "1 de 2" in texto  # períodos em que o filtro foi usado
+    assert "| BTCUSDT | 1m | 1 de 2 | 12.50% | 0.300, — | 0.400 | 30.00% |" in texto
+    assert "DIAGNÓSTICO" not in texto
     assert "**fonte:** teste" in texto
+
+
+def test_modo_diagnostico_marca_o_relatorio_inteiro() -> None:
+    principal = consolidar({("BTCUSDT", Expiracao.M1): resultado(700, 300, 70, 30)}, 0.86)
+    texto = gerar_markdown_v2(principal, {}, {}, {"fonte": "teste"}, diagnostico="entrada ≤ 10 s")
+    assert texto.startswith("# DIAGNÓSTICO DE SENSIBILIDADE (sem direito a aprovação)")
+    assert "entrada ≤ 10 s" in texto
+    assert "Combinações aprovadas" not in texto
+    assert "(teria: ligar)" in texto

@@ -17,6 +17,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from sinais.modelos.decisao import LinhaDecisao, _pct
 
@@ -33,8 +34,10 @@ def meses_ate(fim: str, n: int) -> list[tuple[int, int]]:
 
 @dataclass(frozen=True)
 class ExtrasFiltro:
-    limiares: list[float]  # por período avaliado (dobras + holdout); inf = sem filtro
-    frac_filtrada: list[float]  # fração dos sinais do modelo cortada pelo filtro
+    limiares: list[float]  # por dobra de teste; inf = sem filtro
+    frac_filtrada: list[float]  # fração dos sinais do modelo cortada pelo filtro, por dobra
+    limiar_holdout: float = math.nan
+    frac_holdout: float = math.nan
 
 
 def _cabecalho() -> list[str]:
@@ -66,27 +69,44 @@ def gerar_markdown_v2(
     diagnosticos: Mapping[str, Sequence[LinhaDecisao]],
     extras: Mapping[tuple[str, str], ExtrasFiltro],
     hipoteses: Mapping[str, str],
+    diagnostico: str | None = None,
 ) -> str:
-    partes = ["# Relatório de decisão — modelo v2 (Fase 6b)", "", "## Hipóteses e fonte", ""]
+    """Com ``diagnostico`` (descrição da variação), o relatório inteiro é marcado como
+    diagnóstico de sensibilidade: nenhuma linha é recomendação."""
+    if diagnostico:
+        partes = [
+            "# DIAGNÓSTICO DE SENSIBILIDADE (sem direito a aprovação) — modelo v2 (Fase 6b)",
+            "",
+            f"Variação avaliada: {diagnostico}. Os critérios de aprovação são calculados só "
+            "para leitura; nada aqui liga uma combinação.",
+            "",
+        ]
+    else:
+        partes = ["# Relatório de decisão — modelo v2 (Fase 6b)", ""]
+    partes += ["## Hipóteses e fonte", ""]
     partes += [f"- **{k}:** {v}" for k, v in hipoteses.items()]
     partes += ["", f"## Resultado do candidato ({CANDIDATO})", "", *_cabecalho()]
-    partes += [_linha(x, f"**{x.recomendacao}**") for x in linhas]
+    rec = "(teria: {})" if diagnostico else "**{}**"
+    partes += [_linha(x, rec.format(x.recomendacao)) for x in linhas]
     partes += [
         "",
         "Apertados: fração das operações liquidadas com |Δ preço| ≤ 0,01%. Fora da amostra = "
-        "dobras do walk-forward agregadas; holdout = últimos 3 meses, avaliados uma vez.",
+        "dobras do walk-forward agregadas; holdout = últimos meses, avaliados uma vez.",
         "",
         "## Filtro de apertados (escolhido só na calibração)",
         "",
-        "| Ativo | Exp. | Períodos com filtro | Fração média de sinais cortada | Limiares |",
-        "|---|---|---|---|---|",
+        "| Ativo | Exp. | Dobras de teste com filtro | Fração média cortada no teste "
+        "| Limiares no teste | Limiar no holdout | Fração cortada no holdout |",
+        "|---|---|---|---|---|---|---|",
     ]
     for (ativo, exp), e in extras.items():
         usados = sum(math.isfinite(v) for v in e.limiares)
         media = sum(e.frac_filtrada) / len(e.frac_filtrada) if e.frac_filtrada else math.nan
         lims = ", ".join("—" if not math.isfinite(v) else f"{v:.3f}" for v in e.limiares)
+        lim_h = "—" if not math.isfinite(e.limiar_holdout) else f"{e.limiar_holdout:.3f}"
         partes.append(
-            f"| {ativo} | {exp} | {usados} de {len(e.limiares)} | {_pct(media)} | {lims} |"
+            f"| {ativo} | {exp} | {usados} de {len(e.limiares)} | {_pct(media)} | {lims} "
+            f"| {lim_h} | {_pct(e.frac_holdout)} |"
         )
     for nome, diag in diagnosticos.items():
         partes += [
@@ -99,18 +119,19 @@ def gerar_markdown_v2(
             *[_linha(x, f"(teria: {x.recomendacao})") for x in diag],
         ]
     ligadas = [f"{x.ativo} {x.expiracao}" for x in linhas if x.recomendacao == "ligar"]
-    partes += [
-        "",
-        "## Conclusão",
-        "",
-        (
+    if diagnostico:
+        conclusao = (
+            "Diagnóstico de sensibilidade: não aprova nem reprova combinações. A configuração "
+            "só pode ser aprovada na rodada confirmatória pré-registrada, em meses novos."
+        )
+    else:
+        conclusao = (
             f"Combinações aprovadas: {', '.join(ligadas)}."
             if ligadas
             else "Nenhuma combinação passou nos critérios. Pela regra do produto, todas "
             "mostram AGUARDAR até que um modelo seja aprovado."
-        ),
-        "",
-    ]
+        )
+    partes += ["", "## Conclusão", "", conclusao, ""]
     return "\n".join(partes)
 
 
@@ -138,6 +159,8 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
     holdout_meses: int,
     saida: Path,
     ablacao_fs1: bool,
+    entrada_max_s: int | None = None,
+    tolerancia_atr: float | None = None,
 ) -> None:
     import gc
     import time
@@ -164,6 +187,16 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
         print(f"[{dt:6.1f} min | pico {_memoria_mb():6.0f} MB] {msg}", flush=True)
 
     periodo = meses_ate(fim, meses)
+    execucao: dict[str, Any] = {
+        "entrada_max_ms": None if entrada_max_s is None else entrada_max_s * 1000,
+        "tolerancia_atr": tolerancia_atr,
+    }
+    variacoes = []
+    if entrada_max_s is not None:
+        variacoes.append(f"entrada sorteada entre decisão + 2 s e decisão + {entrada_max_s} s")
+    if tolerancia_atr is not None:
+        variacoes.append(f"tolerância de preço na entrada de {tolerancia_atr} x ATR(14) de 1m")
+    diagnostico = "; ".join(variacoes) or None
     candidato: dict[tuple[str, Expiracao], ResultadoCombinacao] = {}
     sem_filtro: dict[tuple[str, Expiracao], ResultadoCombinacao] = {}
     fs1: dict[tuple[str, Expiracao], ResultadoCombinacao] = {}
@@ -206,18 +239,19 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
             for exp in (Expiracao.M1, Expiracao.M5):
                 r = avaliar_combinacao_v2(
                     df_1m, snap, precos, exp, payout, treino_meses=treino_meses,
-                    holdout_meses=holdout_meses,
+                    holdout_meses=holdout_meses, **execucao,
                 )  # fmt: skip
                 candidato[(ativo, exp)] = r.principal
                 sem_filtro[(ativo, exp)] = r.sem_filtro
                 extras[(ativo, f"{int(exp) // 60}m")] = ExtrasFiltro(
-                    r.limiares_filtro, r.frac_filtrada
-                )
+                    r.limiares_filtro, r.frac_filtrada, r.limiar_filtro_holdout,
+                    r.frac_filtrada_holdout,
+                )  # fmt: skip
                 log(f"{ativo} {exp.name}: {r.principal.dobras} dobras; {r.principal.avisos}")
                 if ablacao_fs1:
                     r1 = avaliar_combinacao_v2(
                         df_1m, snap[colunas_fs1], precos, exp, payout,
-                        treino_meses=treino_meses, holdout_meses=holdout_meses,
+                        treino_meses=treino_meses, holdout_meses=holdout_meses, **execucao,
                     )  # fmt: skip
                     fs1[(ativo, exp)] = r1.principal
                     log(f"{ativo} {exp.name} (fs-1): {r1.principal.dobras} dobras")
@@ -235,9 +269,14 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
         "isotônica; features fs-2 = fs-1 + 17 de microestrutura de 1 s + 3 de calendário",
         "rótulo": "entrada num segundo sorteado entre decisão + 2 s e o prazo de compra; "
         "vencimento alinhado ao relógio da Exnova; preço = fechamento do candle de 1 s",
-        "treino da direção": "só amostras de treino não apertadas; calibração com todas",
-        "filtro de apertados": "HGB prevê apertado (|Δ| ≤ 0,01%); limiar escolhido no mês de "
-        "calibração entre sem filtro e cortar os 10%/25%/50% mais prováveis (maior Wilson inf.)",
+        "treino da direção": "só amostras de treino não apertadas",
+        "calibração": "mês de calibração dividido em duas metades purgadas (embargo de 1 h): "
+        "isotônica na primeira; limiar do filtro na segunda",
+        "filtro de apertados": "HGB prevê apertado (|Δ| ≤ 0,01%); limiar escolhido na 2ª metade "
+        "da calibração entre sem filtro e cortar os 10%/25%/50% mais prováveis (maior Wilson "
+        "inf.)",
+        "execução": diagnostico
+        or "padrão: entrada sorteada em toda a janela de compra, sem tolerância de preço",
         "walk-forward": f"treino {treino_meses} meses (1 a cada 3 minutos) → calibração 1 mês → "
         f"teste 1 mês; purga pelo vencimento real e embargo de 1 h; holdout final de "
         f"{holdout_meses} meses avaliado uma vez",
@@ -249,7 +288,7 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
         "lacunas": ", ".join(lacunas) or "nenhuma",
     }
     saida.mkdir(parents=True, exist_ok=True)
-    texto = gerar_markdown_v2(linhas, diagnosticos, extras, hipoteses)
+    texto = gerar_markdown_v2(linhas, diagnosticos, extras, hipoteses, diagnostico)
     texto += f"\nTempo total: {(time.monotonic() - inicio_total) / 60:.1f} min; pico de memória "
     texto += f"{_memoria_mb():.0f} MB.\n"
     (saida / "decisao_v2.md").write_text(texto, encoding="utf-8")
@@ -267,11 +306,13 @@ if __name__ == "__main__":  # pragma: no cover
     p.add_argument("--treino-meses", type=int, default=6)
     p.add_argument("--holdout-meses", type=int, default=3)
     p.add_argument("--sem-ablacao-fs1", action="store_true")
+    p.add_argument("--entrada-max-s", type=int, default=None, help="diagnóstico")
+    p.add_argument("--tolerancia-atr", type=float, default=None, help="diagnóstico")
     p.add_argument("--saida", type=Path, default=Path("relatorio"))
     a = p.parse_args()
     asyncio.run(
         _principal(
             a.meses, a.fim, a.payout, a.treino_meses, a.holdout_meses, a.saida,
-            not a.sem_ablacao_fs1,
+            not a.sem_ablacao_fs1, a.entrada_max_s, a.tolerancia_atr,
         )
     )  # fmt: skip
