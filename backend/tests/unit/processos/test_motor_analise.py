@@ -362,3 +362,34 @@ def test_resumo_nunca_diz_distancia_negativa() -> None:
     texto = " | ".join(a.resumo)
     assert "-0," not in texto and "a -" not in texto
     assert "Agressão vendedora predominante (0,5)" in a.resumo
+
+
+def test_falha_no_calculo_depois_de_ler_o_banco_nao_pula_a_nova_tentativa() -> None:
+    """A janela só avança depois do cálculo e da publicação: a nova tentativa do mesmo evento
+    (pendente sem ACK) recalcula em vez de ser ignorada como repetida."""
+
+    async def caso() -> None:
+        repo, velas, _ = await preparar()
+        pub, armazem = PublicadorMemoria(), ArmazemAnalisesMemoria()
+        motor = MotorAnalise(["BTCUSDT"], repo, armazem, pub, janela_min=300)
+        await motor.carregar(velas[399].fechamento_ms)
+        await repo.inserir([velas[400]])
+        original = motor.calcular
+        chamadas = {"n": 0}
+
+        def calcular_instavel(simbolo, velas_=None):  # type: ignore[no-untyped-def]
+            chamadas["n"] += 1
+            if chamadas["n"] == 1:
+                raise RuntimeError("falha passageira")
+            return original(simbolo, velas_)
+
+        motor.calcular = calcular_instavel  # type: ignore[method-assign]
+        ev = evento_candle_fechado(velas[400])
+        r = await motor.processar_entradas([("1-0", ev)])
+        assert (r.publicadas, r.falhas) == (0, ["1-0"])
+        assert motor.ultima_abertura("BTCUSDT") == velas[399].abertura
+        r = await motor.processar_entradas([("1-0", ev)])  # XCLAIM entrega de novo
+        assert (r.publicadas, r.falhas) == (1, [])
+        assert motor.ultima_abertura("BTCUSDT") == velas[400].abertura
+
+    asyncio.run(caso())

@@ -19,7 +19,7 @@ import os
 import signal
 import socket
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,6 +41,7 @@ from sinais.api.esquemas import (
 from sinais.dados.modelos import Candle, IntervaloColeta
 from sinais.eventos.contratos import (
     STREAM_ANALISE_ATUALIZADA,
+    STREAM_CANDLE_FECHADO,
     Publicador,
     evento_analise_atualizada,
 )
@@ -245,6 +246,8 @@ def montar_resumo(a: Analise, sem_dados: Sequence[str] = ()) -> list[str]:
 # ------------------------------------------------------------- motor ao vivo
 MAXIMO_ENTREGAS = 5
 STREAM_MORTOS = "candle.fechado.mortos"
+# Pendente sem ACK há mais que isto (de qualquer réplica, viva ou morta) é tomado de novo.
+MIN_OCIOSO_MS = 60_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +269,48 @@ def decidir_pendentes(
 def nome_consumidor(env: Mapping[str, str]) -> str:
     """Nome estável por réplica: ``SINAIS_CONSUMIDOR`` ou o nome do host do contêiner."""
     return env.get("SINAIS_CONSUMIDOR") or f"motor-{socket.gethostname()}"
+
+
+type Concluir = Callable[[list[tuple[str, dict[str, str]]]], Awaitable[None]]
+
+
+async def revisar_pendentes(
+    redis: Any,
+    consumidor: str,
+    concluir: Concluir,
+    min_ocioso_ms: int = MIN_OCIOSO_MS,
+    stream: str = STREAM_CANDLE_FECHADO,
+    grupo: str = GRUPO,
+    mortos: str = STREAM_MORTOS,
+) -> int:
+    """Pendentes sem ACK de **qualquer** consumidor do grupo ociosos há ``min_ocioso_ms``: os
+    que já foram entregues ``MAXIMO_ENTREGAS`` vezes vão para a fila morta; os outros são
+    tomados por este consumidor com ``XAUTOCLAIM`` (uma réplica que morreu não deixa eventos
+    presos) e processados de novo por ``concluir``. Devolve quantos foram reprocessados."""
+    pend = await redis.xpending_range(
+        stream, grupo, min="-", max="+", count=500, idle=min_ocioso_ms
+    )
+    _, desistir = decidir_pendentes([(p["message_id"], int(p["times_delivered"])) for p in pend])
+    for id_ in desistir:
+        for i, campos in await redis.xrange(stream, id_, id_):
+            await redis.xadd(mortos, {**campos, "id_original": i}, maxlen=10_000)
+        await redis.xack(stream, grupo, id_)
+        _log.error("motor_analise.fila_morta", extra={"campos": {"id": id_}})
+    reprocessados = 0
+    inicio = "0-0"
+    for _ in range(100):  # no máximo 50 mil por revisão; o resto fica para a próxima
+        resposta = await redis.xautoclaim(
+            stream, grupo, consumidor, min_idle_time=min_ocioso_ms, start_id=inicio, count=500
+        )
+        proximo, entradas = resposta[0], resposta[1]
+        validas = [(i, c) for i, c in entradas if c]
+        if validas:
+            await concluir(validas)
+            reprocessados += len(validas)
+        if str(proximo) == "0-0":
+            break
+        inicio = proximo
+    return reprocessados
 
 
 class MotorAnalise:
@@ -304,15 +349,14 @@ class MotorAnalise:
                 "motor_analise.carregado", extra={"campos": {"simbolo": simbolo, "n": len(janela)}}
             )
 
-    async def _sincronizar(self, simbolo: str, ate_abertura: int) -> bool:
-        """Lê do banco (fonte da verdade, com o volume agressor) tudo até ``ate_abertura``."""
+    async def _novos(self, simbolo: str, ate_abertura: int) -> list[Candle]:
+        """Lê do banco (fonte da verdade, com o volume agressor) o que falta até
+        ``ate_abertura``, sem mexer na janela."""
         janela = self._janelas[simbolo]
         fim = ate_abertura + _M
         inicio = janela[-1].abertura + _M if janela else fim - self._janela_min * _M
         inicio = max(inicio, fim - self._janela_min * _M)
-        novos = await self._repo.listar(simbolo, IntervaloColeta.M1, inicio, fim)
-        janela.extend(novos)
-        return bool(novos)
+        return await self._repo.listar(simbolo, IntervaloColeta.M1, inicio, fim)
 
     async def processar_lote(self, eventos: Sequence[Mapping[str, str]]) -> int:
         """Atalho para testes e para o carregamento: devolve quantas análises publicou."""
@@ -359,24 +403,31 @@ class MotorAnalise:
         return ResultadoLote(publicadas, descartadas, falhas)
 
     async def _publicar(self, simbolo: str, abertura: int) -> int:
-        if not await self._sincronizar(simbolo, abertura):
+        """Calcula com a janela + os minutos novos e só então avança a janela: se o cálculo,
+        a gravação ou a publicação falhar, a nova tentativa do mesmo evento recalcula (antes
+        ela era ignorada como repetida e a análise ficava parada)."""
+        novos = await self._novos(simbolo, abertura)
+        if not novos:
             return 0
-        analise = await asyncio.to_thread(self.calcular, simbolo)
-        if analise is None:
-            return 0
-        texto = analise.model_dump_json()
-        await self._armazem.salvar(simbolo, texto)
-        await self._pub.publicar(
-            STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada(simbolo, analise.t, texto)
-        )
-        return 1
+        janela = self._janelas[simbolo]
+        velas = [*janela, *novos][-self._janela_min :]
+        analise = await asyncio.to_thread(self.calcular, simbolo, velas)
+        if analise is not None:
+            texto = analise.model_dump_json()
+            await self._armazem.salvar(simbolo, texto)
+            await self._pub.publicar(
+                STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada(simbolo, analise.t, texto)
+            )
+        janela.extend(novos)
+        return 0 if analise is None else 1
 
-    def calcular(self, simbolo: str) -> Analise | None:
-        velas = self.janela(simbolo)
-        if not velas:
+    def calcular(self, simbolo: str, velas: Sequence[Candle] | None = None) -> Analise | None:
+        """Análise da janela de ``simbolo`` (ou de ``velas``, quando informadas)."""
+        lista = list(velas) if velas is not None else self.janela(simbolo)
+        if not lista:
             return None
-        snapshot = montar_snapshot(para_quadro(velas))
-        return montar_analise(simbolo, snapshot, decimal_texto(velas[-1].fechamento))
+        snapshot = montar_snapshot(para_quadro(lista))
+        return montar_analise(simbolo, snapshot, decimal_texto(lista[-1].fechamento))
 
 
 async def principal() -> None:  # pragma: no cover - ligação de I/O
@@ -387,7 +438,6 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
     from sinais.core.config import carregar_configuracao
     from sinais.core.dominio import ATIVOS_V1
     from sinais.core.tempo import RelogioSistema
-    from sinais.eventos.contratos import STREAM_CANDLE_FECHADO
     from sinais.eventos.redis_streams import PublicadorRedis
     from sinais.logs import configurar_logs
     from sinais.persistencia.analises import ArmazemAnalisesRedis
@@ -439,30 +489,11 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
         if r.publicadas:
             _log.info("motor_analise.publicado", extra={"campos": {"analises": r.publicadas}})
 
-    async def revisar_pendentes() -> None:
-        """Pendentes sem ACK: tenta de novo; depois de MAXIMO_ENTREGAS, fila morta."""
-        pend = await redis.xpending_range(
-            STREAM_CANDLE_FECHADO, GRUPO, min="-", max="+", count=500, consumername=consumidor
-        )
-        reprocessar, desistir = decidir_pendentes(
-            [(p["message_id"], int(p["times_delivered"])) for p in pend]
-        )
-        for id_ in desistir:
-            for i, campos in await redis.xrange(STREAM_CANDLE_FECHADO, id_, id_):
-                await redis.xadd(STREAM_MORTOS, {**campos, "id_original": i}, maxlen=10_000)
-            await redis.xack(STREAM_CANDLE_FECHADO, GRUPO, id_)
-            _log.error("motor_analise.fila_morta", extra={"campos": {"id": id_}})
-        if reprocessar:
-            # XCLAIM entrega de novo (e conta a entrega) as que falharam.
-            ids: list[Any] = list(reprocessar)
-            entradas = await redis.xclaim(STREAM_CANDLE_FECHADO, GRUPO, consumidor, 0, ids)
-            await concluir([(i, c) for i, c in entradas if c])
-
     proxima_revisao = 0.0
     while not parar.is_set():
         try:
             if laco.time() >= proxima_revisao:
-                await revisar_pendentes()
+                await revisar_pendentes(redis, consumidor, concluir)
                 proxima_revisao = laco.time() + 30
             resposta = await redis.xreadgroup(
                 GRUPO, consumidor, {STREAM_CANDLE_FECHADO: ">"}, count=500, block=2000

@@ -88,3 +88,44 @@ def test_api_que_sobe_no_meio_do_minuto_rele_os_negocios_recentes() -> None:
         "c": "95",
         "v": "5",
     }
+
+
+def test_xautoclaim_toma_pendentes_de_outra_replica_e_estourados_vao_para_a_morta() -> None:
+    """Réplica do motor que morreu com eventos sem ACK: a outra toma esses pendentes depois do
+    tempo mínimo ocioso (XAUTOCLAIM entre consumidores) e os que já foram entregues demais vão
+    para a fila morta."""
+    from sinais.processos.motor_analise import revisar_pendentes
+
+    url = exigir_redis()
+    stream, grupo, mortos = "teste.autoclaim", "g-autoclaim", "teste.autoclaim.mortos"
+
+    async def caso() -> tuple[list[str], list[str], list[str], int]:
+        r = Redis.from_url(url, decode_responses=True)
+        await r.delete(stream, mortos)
+        await r.xgroup_create(stream, grupo, id="0", mkstream=True)
+        ids = [await r.xadd(stream, {"n": str(i)}) for i in range(3)]
+        # a réplica A lê tudo e morre sem ACK
+        await r.xreadgroup(grupo, "motor-a", {stream: ">"}, count=10)
+        # o terceiro já foi entregue o máximo de vezes
+        for _ in range(4):
+            await r.xclaim(stream, grupo, "motor-a", 0, [ids[2]])
+        tomados: list[str] = []
+
+        async def concluir(entradas: list[tuple[str, dict[str, str]]]) -> None:
+            tomados.extend(i for i, _ in entradas)
+            await r.xack(stream, grupo, *[i for i, _ in entradas])
+
+        # ainda não ficaram ociosos o bastante: ninguém toma
+        assert await revisar_pendentes(r, "motor-b", concluir, 60_000, stream, grupo, mortos) == 0
+        await asyncio.sleep(0.2)
+        n = await revisar_pendentes(r, "motor-b", concluir, 100, stream, grupo, mortos)
+        mortas = [c["id_original"] for _, c in await r.xrange(mortos)]
+        pendentes = await r.xpending(stream, grupo)
+        await r.delete(stream, mortos)
+        await r.aclose()
+        return ids, tomados, mortas, n + int(pendentes["pending"])
+
+    ids, tomados, mortas, n = asyncio.run(caso())
+    assert tomados == ids[:2]
+    assert mortas == [ids[2]]
+    assert n == 2  # dois reprocessados, nenhum pendente sobrando
