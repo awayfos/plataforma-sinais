@@ -9,7 +9,7 @@ Requer Node.js ≥ 20.9 (o CI usa Node 22) e o backend FastAPI rodando em `http:
 
 ```bash
 cd frontend
-npm install          # requer acesso ao registro npm (ver "Sem lockfile" abaixo)
+npm ci               # requer acesso ao registro npm (ver "Lockfile" abaixo)
 npm run dev          # http://localhost:3000
 ```
 
@@ -42,13 +42,13 @@ em `http://localhost`; use `localhost` (não o IP da máquina) no desenvolviment
 Os testes ponta a ponta simulam a API (`page.route`) e o WebSocket (`page.routeWebSocket`) em `e2e/mocks.ts`.
 Esses dados são **simulações de teste**, rotulados como tal, e nunca aparecem na aplicação.
 
-## Sem lockfile
+## Lockfile
 
-O ambiente em que este frontend foi escrito não tem acesso ao registro npm, então não há `package-lock.json`.
-O CI (`.github/workflows/frontend.yml`) instala pelas faixas do `package.json` a cada execução. O `.npmrc` usa
-`legacy-peer-deps=true` para contornar uma falha do npm 10 ao resolver peers opcionais (vitest → jsdom →
-`@napi-rs/canvas`); todos os peers necessários estão declarados. Para builds reproduzíveis, gere o lock numa
-máquina com rede (`npm install`) e faça commit do `package-lock.json`; depois troque `npm install` por `npm ci` no CI.
+O `package-lock.json` foi gerado no CI (o ambiente em que o frontend foi escrito não tem acesso ao registro npm)
+e o CI instala com `npm ci`. Para atualizar dependências, rode `npm install` numa máquina com rede e faça commit
+do lock. O `.npmrc` usa `legacy-peer-deps=true` porque o npm 10 ainda quebra ao resolver os peers opcionais
+vitest → jsdom → `@napi-rs/canvas` (`Cannot read properties of null (reading 'edgesOut')`), conferido em
+2026-11-26; todos os peers necessários estão declarados.
 
 ## Estrutura
 
@@ -76,11 +76,17 @@ e2e/                       # Playwright
 
 - **Autoridade no servidor.** O `proxy.ts` não valida nada além da existência do cookie. Qualquer `401` leva ao
   login, `402` à tela de assinatura, `429` mostra "Muitas requisições…". O WebSocket fechado com `4401`/`4402`
-  não reconecta.
+  não reconecta. Depois de 3 quedas seguidas (um handshake recusado chega como 1006), o frontend confere a
+  sessão com `GET /api/eu`, e os tratadores de 401/402 redirecionam. Ao reconectar, candles, análise e sinais
+  são recarregados por REST; enquanto não há tempo real, sinais e análise ficam esmaecidos e marcados como
+  possivelmente desatualizados.
 - **Preços como string.** Preços da API são exibidos a partir da string decimal, sem passar por `float`. Só o
   gráfico converte para número.
-- **Horário de Brasília.** Tudo trafega em ms UTC; a tela e o eixo do gráfico mostram UTC−3 (o Brasil não tem
-  horário de verão desde 2019).
+- **Horário de Brasília.** Tudo trafega em ms UTC; a tela e o eixo intradiário do gráfico mostram UTC−3 (o
+  Brasil não tem horário de verão desde 2019). Barras de 1d e 1w ficam na data UTC de abertura, sem deslocamento.
+- **Relógio do servidor.** A contagem da janela de entrada usa a hora do servidor estimada pelo cabeçalho `Date`
+  das respostas, com 1 s de margem de segurança, e não o relógio da máquina.
+- **VWAP** é ancorado em 00:00 UTC (21:00 em Brasília) e só fica disponível em tempos intradiários.
 - **Indicadores do gráfico** são calculados no navegador a partir dos candles exibidos, só para visualização. A
   análise oficial (`/api/analise`) vem do backend.
 - **Nenhum dado inventado.** Probabilidade só aparece quando o backend envia, sempre com `n`. Campos fora do

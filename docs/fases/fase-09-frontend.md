@@ -35,8 +35,30 @@ Camada técnica:
 6. Indicadores do gráfico calculados no navegador, só para exibição; a análise oficial vem do backend.
 7. Eixo do gráfico em UTC−3 fixo (o Brasil não tem horário de verão desde 2019).
 8. Desenhos salvos por ativo (valem em todos os tempos gráficos).
-9. `.npmrc` com `legacy-peer-deps=true`: o npm 10.9 do CI quebra ao resolver os peers opcionais vitest → jsdom → `@napi-rs/canvas` (`Cannot read properties of null (reading 'edgesOut')`). Todos os peers necessários estão declarados.
-10. Sem `package-lock.json`: o ambiente de desenvolvimento não tem acesso ao registro npm. O CI instala pelas faixas do `package.json`.
+9. `.npmrc` com `legacy-peer-deps=true`: o npm 10.9 do CI quebra ao resolver os peers opcionais vitest → jsdom → `@napi-rs/canvas` (`Cannot read properties of null (reading 'edgesOut')`). Conferido de novo em 2026-11-26: sem a opção, a geração do lock ainda falha. Todos os peers necessários estão declarados.
+10. `package-lock.json` gerado no CI (o ambiente de desenvolvimento não tem acesso ao registro npm) e versionado; os três jobs usam `npm ci`. Versões travadas: Next 16.4.6, React 19.3.1, TypeScript 5.9.3, Vitest 4.1.12, Playwright 1.65.1, Lightweight Charts 5.3.0.
+
+## 2.1 Correções da revisão independente (PR #13)
+
+Cada correção teve um teste enviado antes e visto falhando no CI (commit `7c8a582`: 14 testes falhando), depois verde com a correção (`d3cdce1`).
+
+| Item | Correção | Teste (vermelho → verde) |
+|---|---|---|
+| I1 | `destinoSeguro` recusa caracteres de controle e `\`, confere a origem com `new URL` e devolve caminho + consulta + âncora | `form-login.test.tsx` › rejeita caracteres de controle e barra invertida; mantém caminho interno codificado |
+| I2 | Contagem da janela pelo relógio do servidor (cabeçalho `Date`, meio do segundo) menos 1 s de margem | `cartao-sinal.test.tsx` › usa o relógio do servidor…; com o cliente adiantado…; `cliente.test.ts` › registra o relógio do servidor pelo cabeçalho Date |
+| I3 | Ao reconectar, recarrega candles, análise e sinais (mantendo os dados na tela); sem tempo real, aviso "desatualizados" e painéis esmaecidos; status da conexão também no celular | `terminal.test.tsx` › marca os dados como desatualizados na queda e recarrega tudo ao reconectar |
+| I4 | A cada 3 quedas seguidas sem conexão estável, `GET /api/eu` (401/402 redirecionam) | `ws/cliente.test.ts` › após 3 falhas seguidas…; uma conexão aberta zera a contagem |
+| I5 | Lista de sinais do WebSocket vale só para o ativo e a conexão em que chegou; limpa ao trocar de ativo | `terminal.test.tsx` › sinais antigos do WebSocket não vencem o REST novo |
+| I6 | Barras 1d/1w sem deslocamento de fuso; VWAP desabilitado em 1d/1w, âncora documentada (00:00 UTC) | `candles-ao-vivo.test.ts` › tempoDoGrafico; `barra-ferramentas.test.tsx` › VWAP só em tempos intradiários |
+| I7 | Probabilidade só com direção diferente de AGUARDAR, valor e n | `tabela-sinais.test.tsx` › probabilidade sem n…; AGUARDAR nunca mostra probabilidade; `cartao-sinal.test.tsx` › probabilidade sem n… |
+| I8 | Lockfile versionado, `npm ci`, cache do npm, `permissions: contents: read` | CI verde com `npm ci` |
+| I9 | Histórico sem AGUARDAR (lista e contas) e paginação de 50 | `tabela-historico.test.tsx` › não lista AGUARDAR e pagina de 50 em 50; `sinais.test.ts` › AGUARDAR não entra nas estatísticas |
+| M2 | Senha atual errada (422/403) mostra a mensagem sem encerrar a sessão (já funcionava; teste passou de primeira) | `form-senha.test.tsx` › senha atual errada (422/403)… |
+| M4 | Tempo gráfico ausente na análise mostra "—", não "Lateral" | `painel-analise.test.tsx` › tempo gráfico ausente… |
+| M6 | Nota "AGUARDAR em todas" só quando as 5 linhas são AGUARDAR | `tabela-sinais.test.tsx` › nota de AGUARDAR em todas… |
+| M10 | Legenda do gráfico não mistura séries ao trocar de ativo | `candles-ao-vivo.test.ts` › legendaVisivel |
+
+Itens menores da revisão deixados para depois: M1, M3, M5, M7, M8, M9, M11, M12.
 
 ## 3. Pontos do contrato para o backend
 
@@ -46,10 +68,12 @@ Camada técnica:
 4. Deixar `GET /api/eu` e `POST /api/eu/senha` fora da exigência de assinatura ativa, para a tela de assinatura mostrar o plano e o usuário poder trocar a senha.
 5. `PATCH /api/admin/planos` não tem id na rota: o frontend envia o plano inteiro, com `id`, no corpo.
 6. Payout em fração (0,86); o editor mostra e aceita porcentagem.
+7. Para a janela de entrada, o ideal é o servidor mandar a própria hora (ex.: campo `servidor_ms` nas mensagens de `sinais`); hoje o frontend estima pelo cabeçalho `Date`, com resolução de 1 s.
+8. `/api/sinais/historico` não tem limite nem paginação no contrato; o frontend pagina na tela.
 
 ## 4. Testes e CI
 
-Workflow `.github/workflows/frontend.yml` (push e pull request em `frontend/**`), três jobs em paralelo:
+Workflow `.github/workflows/frontend.yml` (push e pull request em `frontend/**`, `permissions: contents: read`, instalação com `npm ci`), três jobs em paralelo:
 
 | Job | Passos |
 |---|---|
@@ -74,4 +98,3 @@ Revisão visual: as capturas do CI saem também no log do job (em base64), porqu
 - Latência de ponta a ponta medida só com o backend real (critério da Fase 9).
 - Página pública de estatísticas (`/api/publico/estatisticas`) depende do formato da resposta (ponto 3 acima).
 - CSP com nonce e cabeçalhos HSTS ficam para a Fase 11 (hoje: `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`).
-- Gerar e versionar o `package-lock.json` numa máquina com rede.

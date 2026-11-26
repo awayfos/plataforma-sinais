@@ -1,7 +1,7 @@
 name: Frontend
 
-# Sem package-lock.json: o ambiente de desenvolvimento não tem acesso ao registro npm,
-# então as dependências são resolvidas aqui, pelas faixas do package.json (ver frontend/README.md).
+# Instalação reproduzível pelo package-lock.json (gerado no CI, porque o ambiente de desenvolvimento
+# não tem acesso ao registro npm; ver frontend/README.md).
 on:
   push:
     paths:
@@ -24,31 +24,6 @@ defaults:
     working-directory: frontend
 
 jobs:
-  lockfile:
-    # TEMPORÁRIO: gera o package-lock.json com rede e imprime no log (gzip + base64) para versionar.
-    name: Gerar lockfile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Sem legacy-peer-deps
-        continue-on-error: true
-        run: |
-          mv .npmrc /tmp/npmrc
-          if npm install --package-lock-only --no-audit --no-fund; then
-            echo "LOCK_ESTRITO"; gzip -9c package-lock.json | base64 -w0; echo
-          else
-            echo "LOCK_ESTRITO_FALHOU"; tail -n 30 ~/.npm/_logs/*-debug-0.log
-          fi
-          mv /tmp/npmrc .npmrc
-          rm -f package-lock.json
-      - name: Com legacy-peer-deps
-        run: |
-          npm install --package-lock-only --no-audit --no-fund
-          echo "LOCK_LEGADO"; gzip -9c package-lock.json | base64 -w0; echo
-
   verificacao:
     name: Lint e tipos
     runs-on: ubuntu-latest
@@ -57,8 +32,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: npm install
-        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        run: npm ci --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm ls next react react-dom lightweight-charts tailwindcss vitest @playwright/test typescript eslint
       - run: npm run lint
       - run: npm run typecheck
@@ -71,8 +48,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: npm install
-        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        run: npm ci --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm test
 
   build-e2e:
@@ -83,8 +62,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: npm install
-        run: npm install --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        run: npm ci --no-audit --no-fund || { tail -n 80 ~/.npm/_logs/*-debug-0.log; exit 1; }
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
