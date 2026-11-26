@@ -229,6 +229,8 @@ def test_admin_fluxo_completo_e_cliente_sem_acesso() -> None:
     assert acessos[0]["evento"] == "login" and set(acessos[0]) == {
         "id",
         "usuario_id",
+        "email",
+        "ts",
         "evento",
         "ip",
         "user_agent",
