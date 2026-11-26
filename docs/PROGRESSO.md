@@ -61,6 +61,11 @@ Documento central para retomar o desenvolvimento sem perder decisões. Atualizad
 - Teste de 72 h ao vivo do coletor: exige servidor.
 - Rodada confirmatória da Fase 6b (com a emenda 15m/30m): a partir de 2027-02, depois da publicação de 2027-01.
 - Itens menores adiados da revisão de integração (M4, M5, M6, M7, M12): `docs/fases/fase-07-08-10-backend.md`, seção "Revisão de integração".
+  - M4: cada WebSocket revalida a sessão a cada 5 s (~3 consultas por conexão) e mantém a sessão "ativa" enquanto a aba estiver aberta.
+  - M5: corrida na subida da API entre a carga do banco e o primeiro 1m oficial (se corrige na recarga seguinte, em até 1 min).
+  - M6: o conjunto de ids de negócios por minuto não tem limite se o coletor travar.
+  - M7: segredos TOTP gravados antes do formato `k1:` + AAD não abrem (só existiram em dev/CI; refazer com `criar_admin`).
+  - M12: `/api/candles` de 1d/1w agrega a partir do 1m a cada carga (lento com 730 dias de histórico); candidato a agregado contínuo do TimescaleDB.
 
 - Parecer jurídico sobre CVM e defesa do consumidor (portão da Fase 11).
 - Regra de empate confirmada pela pesquisa (devolve o valor); payout informado: 86% a 89%.
