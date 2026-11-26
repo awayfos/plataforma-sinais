@@ -136,3 +136,57 @@ def test_canal_preco_no_websocket() -> None:
         "BTCUSDT",
         "preco:BTCUSDT",
     )
+
+
+def test_primeiro_fechamento_com_banco_vazio_na_carga_recarrega_o_periodo() -> None:
+    async def caso() -> None:
+        repo = RepositorioCandlesMemoria()
+        d = Distribuidor()
+        g = GestorVelas(["BTCUSDT"], repo, RelogioFixo(T9 + 2 * M + 10), d)
+        await g.carregar()  # banco ainda vazio (backfill em andamento)
+        a = d.novo_assinante()
+        d.assinar(a, "candles:BTCUSDT:1h")
+        g.ao_negocio("BTCUSDT", neg(1, T9 + 2 * M + 5, "102"))
+        await repo.inserir([vela(T9, "100", "2"), vela(T9 + M, "101", "3")])
+        primeiro = vela(T9 + 2 * M, "103", "4")
+        await repo.inserir([primeiro])
+        await g.ao_fechado(evento_candle_fechado(primeiro))
+        g.ao_negocio("BTCUSDT", neg(2, T9 + 3 * M + 5, "99"))
+        h1 = dict(g.drenar())["candles:BTCUSDT:1h"]
+        # 09:00 + 09:01 + 09:02 oficiais do banco + negócio de 09:03
+        assert (h1["t"], h1["o"], h1["h"], h1["l"], h1["c"], h1["v"]) == (
+            T9,
+            "100",
+            "103",
+            "99",
+            "99",
+            "10",
+        )
+        assert g.vela_oficial_ok("BTCUSDT")
+
+    asyncio.run(caso())
+
+
+def test_banco_atrasado_em_relacao_ao_evento_mantem_o_oficial_e_tenta_de_novo() -> None:
+    async def caso() -> None:
+        repo = RepositorioCandlesMemoria()
+        d = Distribuidor()
+        g = GestorVelas(["BTCUSDT"], repo, RelogioFixo(T9 + 2 * M + 10), d)
+        await g.carregar()
+        a = d.novo_assinante()
+        d.assinar(a, "candles:BTCUSDT:1h")
+        await repo.inserir([vela(T9, "100", "2"), vela(T9 + M, "101", "3")])
+        # o evento de 09:02 chega antes de o banco ter a linha (réplica atrasada)
+        await g.ao_fechado(evento_candle_fechado(vela(T9 + 2 * M, "103", "4")))
+        g.ao_negocio("BTCUSDT", neg(1, T9 + 3 * M + 5, "104"))
+        h1 = dict(g.drenar())["candles:BTCUSDT:1h"]
+        assert (h1["o"], h1["h"], h1["c"], h1["v"]) == ("100", "104", "104", "10")
+        assert g.vela_oficial_ok("BTCUSDT")
+
+        # banco sem nada: o oficial vale, mas a próxima chegada recarrega de novo
+        g2 = GestorVelas(["BTCUSDT"], RepositorioCandlesMemoria(), RelogioFixo(T9 + 2 * M), d)
+        await g2.carregar()
+        await g2.ao_fechado(evento_candle_fechado(vela(T9 + 2 * M, "103", "4")))
+        assert not g2.vela_oficial_ok("BTCUSDT")
+
+    asyncio.run(caso())

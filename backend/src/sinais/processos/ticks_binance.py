@@ -1,9 +1,11 @@
 """Processo de ticks: aggTrade da Binance → Redis Pub/Sub ``ticks:{SIMBOLO}``.
 
-Não grava nada: os candles persistidos continuam vindo só dos klines fechados do coletor. Usa
-o mesmo consumidor de streams (reconexão com backoff, renovação antes de 24 h). Em toda
-(re)conexão, antes de ler o stream, republica pelo REST os aggTrades do minuto atual: a vela
-em formação na API descarta os repetidos pelo id e não fica com buraco depois de uma queda.
+Não grava candles: os persistidos continuam vindo só dos klines fechados do coletor. Cada negócio
+também vai para o stream curto ``ticks.recentes:{SIMBOLO}`` (minuto atual e anterior, ver
+``sinais.eventos.ticks_recentes``), que a API relê quando sobe ou quando o Pub/Sub reconecta.
+Usa o mesmo consumidor de streams (reconexão com backoff, renovação antes de 24 h). Em toda
+(re)conexão com a Binance, antes de ler o stream, republica pelo REST os aggTrades do minuto
+atual: a vela em formação na API descarta os repetidos pelo id e não fica com buraco.
 
 Execução: ``python -m sinais.processos.ticks_binance``.
 """
@@ -88,6 +90,7 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
         conector_websockets,
         url_combinada,
     )
+    from sinais.eventos.ticks_recentes import PublicadorTicksRedis
     from sinais.logs import configurar_logs
 
     cfg = carregar_configuracao()
@@ -99,10 +102,8 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
     for sinal in (signal.SIGTERM, signal.SIGINT):
         laco.add_signal_handler(sinal, parar.set)
 
-    async def publicar(canal: str, texto: str) -> None:
-        await redis.publish(canal, texto)
-
     relogio = RelogioSistema()
+    publicar = PublicadorTicksRedis(redis, relogio)
     async with httpx.AsyncClient() as http:
         coletor = ColetorTicks(
             simbolos, publicar, ClienteRestBinance(cfg.binance_rest_url, http), relogio

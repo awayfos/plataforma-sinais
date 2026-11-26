@@ -92,7 +92,7 @@ function FormNovoUsuario({ planos, aoCriar, aoCancelar }: { planos: Plano[]; aoC
 }
 
 function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]; aoMudar: () => void }) {
-  const [acao, setAcao] = useState<"nenhuma" | "bloquear" | "editar" | "renovar" | "senha">("nenhuma");
+  const [acao, setAcao] = useState<"nenhuma" | "bloquear" | "editar" | "renovar" | "senha" | "encerrar">("nenhuma");
   const [senhaNova, setSenhaNova] = useState("");
   const [nome, setNome] = useState(u.nome);
   const [email, setEmail] = useState(u.email);
@@ -116,6 +116,7 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
   }
 
   const status = u.status ?? "ativo";
+  const assinaturaVigente = u.assinatura?.status === "ativa" && u.assinatura_id != null ? u.assinatura_id : null;
   return (
     <tr className={tabela.linha}>
       <td className={tabela.td}>
@@ -147,6 +148,16 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
             <>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("editar")} aria-label={`Editar ${u.nome}`}>Editar</button>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("renovar")} aria-label={`Renovar ${u.nome}`}>Renovar</button>
+              {assinaturaVigente !== null && (
+                <button
+                  type="button"
+                  className={botao.fantasma}
+                  onClick={() => setAcao("encerrar")}
+                  aria-label={`Encerrar assinatura de ${u.nome}`}
+                >
+                  Encerrar
+                </button>
+              )}
               <button
                 type="button"
                 className={botao.fantasma}
@@ -172,6 +183,20 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
               <span className="self-center text-[11px] text-suave">Bloquear acesso agora?</span>
               <button type="button" className={botao.perigo} disabled={ocupado} onClick={() => executar(() => api.admin.editarUsuario(u.id, { status: "bloqueado" }))}>
                 Confirmar bloqueio
+              </button>
+              <button type="button" className={botao.fantasma} onClick={() => setAcao("nenhuma")}>Cancelar</button>
+            </>
+          )}
+          {acao === "encerrar" && assinaturaVigente !== null && (
+            <>
+              <span className="self-center text-[11px] text-suave">Encerrar a assinatura agora? O acesso termina na hora.</span>
+              <button
+                type="button"
+                className={botao.perigo}
+                disabled={ocupado}
+                onClick={() => executar(() => api.admin.encerrarAssinatura(assinaturaVigente))}
+              >
+                Confirmar encerramento
               </button>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("nenhuma")}>Cancelar</button>
             </>

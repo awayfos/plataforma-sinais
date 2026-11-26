@@ -5,7 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, Response
 
 from sinais.api import esquemas as e
-from sinais.api.dependencias import CABECALHO_CSRF, COOKIE_CSRF, COOKIE_SESSAO, Svc, ip_cliente
+from sinais.api.dependencias import (
+    CABECALHO_CSRF,
+    COOKIE_CSRF,
+    COOKIE_DISPOSITIVO,
+    COOKIE_SESSAO,
+    Svc,
+    ip_cliente,
+)
 from sinais.api.erros import RESPOSTAS_ERRO
 from sinais.api.servicos import Servicos
 from sinais.api.visoes import usuario_saida
@@ -36,6 +43,22 @@ def _cookies(resposta: Response, s: Servicos, token: str, csrf: str) -> None:
     )
 
 
+def _cookie_dispositivo(resposta: Response, s: Servicos, valor: str) -> None:
+    """Dispositivo confiável: só vai para /api/auth, não é lido por JavaScript e sobrevive ao
+    logout (é o que deixa o dono entrar durante um ataque distribuído à conta)."""
+    if not valor:
+        return
+    resposta.set_cookie(
+        COOKIE_DISPOSITIVO,
+        valor,
+        max_age=s.contas.params.dispositivo_validade_ms // 1000,
+        httponly=True,
+        secure=s.cookie_seguro,
+        samesite="strict",
+        path="/api/auth",
+    )
+
+
 def _apagar_cookies(resposta: Response, s: Servicos) -> None:
     for nome, http_only in ((COOKIE_SESSAO, True), (COOKIE_CSRF, False)):
         resposta.delete_cookie(
@@ -53,8 +76,10 @@ async def login(
         corpo.totp,
         ip_cliente(request, s),
         request.headers.get("user-agent", "")[:256],
+        dispositivo=request.cookies.get(COOKIE_DISPOSITIVO),
     )
     _cookies(response, s, r.token, r.csrf)
+    _cookie_dispositivo(response, s, r.dispositivo)
     ctx = await s.contas.autenticar(r.token)
     return e.RespostaLogin(usuario=usuario_saida(ctx.usuario, ctx.assinatura, ctx.plano, ctx.agora))
 

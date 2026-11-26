@@ -18,7 +18,7 @@ Entregar o backend que o frontend (Fase 9) consome: contas e autenticação com 
 | Senhas | Argon2id (`argon2-cffi`, parâmetros RFC 9106 de baixa memória). Rehash automático se os parâmetros mudarem. E-mail inexistente gasta uma verificação de hash, para responder no mesmo tempo. |
 | Sessão | Token opaco de 256 bits. O banco guarda só o SHA-256. Cookie `sinais_sessao` httpOnly, Secure, SameSite=Lax. Duração máxima 7 dias e ociosidade de 24 h (configuráveis). |
 | CSRF | Double submit: cookie `sinais_csrf` (não httpOnly) igual ao cabeçalho `X-CSRF-Token` **e** igual ao CSRF da própria sessão (hash no banco). O CSRF de outra sessão não vale. |
-| Limites | 20 tentativas de login por minuto por IP e 10 por e-mail → 429. Bloqueio progressivo: 5 falhas seguidas → 60 s, dobra a cada nova falha, teto de 30 min → 423. As chaves usam o hash do e-mail, então e-mail inexistente recebe as mesmas respostas (sem enumeração de contas). Contador no Redis (compartilhado entre processos). |
+| Limites | 20 tentativas de login por minuto por IP e 10 por (e-mail, IP) → 429. Bloqueio progressivo por (e-mail, IP): 5 falhas seguidas → 60 s, dobra a cada nova falha, teto de 30 min → 423. Teto global por e-mail (50 falhas/h → 15 min) contra ataque distribuído, do qual o **dispositivo confiável** (cookie assinado `sinais_dispositivo`, emitido no login) escapa. IPv6 conta por bloco /64; IPv4 mapeado em IPv6 vira o IPv4. As chaves usam o hash do e-mail, então e-mail inexistente recebe as mesmas respostas (sem enumeração de contas). Contador no Redis (compartilhado entre processos). |
 | 2FA | TOTP obrigatório para admin (`pyotp`, ±1 passo de 30 s). O mesmo código não vale duas vezes (último passo usado fica no usuário). Segredo TOTP cifrado com AES-GCM (`SINAIS_CHAVE_CIFRA`). `totp_necessario` só aparece com a senha certa. |
 | Sessões simultâneas | 1 por conta por padrão (`SINAIS_SESSOES_SIMULTANEAS`): o login novo revoga a mais antiga. |
 | Revogação | Logout, troca de senha (derruba as outras), bloqueio, desativação e redefinição de senha pelo admin revogam na hora. |
@@ -31,10 +31,10 @@ Entregar o backend que o frontend (Fase 9) consome: contas e autenticação com 
 Todas as rotas do contrato, conferidas pelo teste `test_todas_as_rotas_do_contrato_existem` e pelo snapshot `docs/api/openapi-v1.json` (o CI regenera e compara com `diff`):
 
 - `/api/auth/login`, `/api/auth/logout`, `/api/eu`, `/api/eu/senha`, `/api/eu/preferencias`
-- `/api/ativos`, `/api/candles` (1m direto; 3m…1w por `time_bucket` só com blocos completos), `/api/analise`, `/api/sinais`, `/api/sinais/historico`
-- `/api/admin/usuarios` (GET/POST/PATCH `{id}`), `/api/admin/planos` (GET/POST/PATCH `{id}`), `/api/admin/assinaturas`, `/api/admin/acessos`, `/api/admin/auditoria`, `/api/admin/corretoras/exnova/payout` (GET/PUT), `/api/admin/qualidade`
+- `/api/ativos`, `/api/candles` (1m direto; 3m…1w por `time_bucket` só com blocos completos), `/api/analise`, `/api/sinais`, `/api/sinais/historico` (`simbolo` opcional: sem ele, todos os ativos do plano)
+- `/api/admin/usuarios` (GET/POST/PATCH `{id}`), `/api/admin/planos` (GET/POST/PATCH `{id}`), `/api/admin/assinaturas`, `/api/admin/assinaturas/{id}/encerrar`, `/api/admin/acessos`, `/api/admin/auditoria`, `/api/admin/corretoras/exnova/payout` (GET/PUT), `/api/admin/qualidade`
 - `/api/publico/estatisticas`
-- `/api/ws`: canais `candles:SIMBOLO:TG`, `analise:SIMBOLO`, `sinais:SIMBOLO`. Uma leitura do Redis Streams por processo da API alimenta todos os assinantes (fila por cliente; cliente lento perde a mensagem mais antiga, não trava os outros). Sessão e assinatura checadas na conexão, em cada `assinar`, a cada `SINAIS_WS_VERIFICACAO_S` (5 s) e, sem ir ao banco, antes de cada envio. Fecha com **4401** (sessão revogada/expirada) e **4402** (assinatura vencida). Origem de outro site → 4403.
+- `/api/ws`: canais `candles:SIMBOLO:TG`, `preco:SIMBOLO`, `analise:SIMBOLO`, `sinais:SIMBOLO`. Uma leitura do Redis Streams e uma assinatura do Pub/Sub `ticks:*` por processo da API alimentam todos os assinantes (fila por cliente, payload codificado uma vez por publicação; cliente lento perde a mensagem mais antiga, não trava os outros). Sessão e assinatura checadas na conexão, em cada `assinar`, a cada `SINAIS_WS_VERIFICACAO_S` (5 s) e, sem ir ao banco, antes de cada envio. Fecha com **4401** (sessão revogada/expirada) e **4402** (assinatura vencida). Origem de outro site → 4403.
 
 Erros sempre `{"erro": {"codigo", "mensagem"}}`, inclusive 404 de rota, 422 de validação e 500. Cabeçalhos: `nosniff`, `X-Frame-Options: DENY`, CSP `default-src 'none'`, `Cache-Control: no-store`, HSTS. Documentação interativa desligada por padrão (`SINAIS_DOCUMENTACAO=true` liga).
 
@@ -125,12 +125,12 @@ Revisão do autor sobre o branch inteiro (sem revisor independente nesta sessão
 | Usuário A lendo dados de B | Nenhuma rota de cliente recebe id de usuário; os dados vêm do usuário da sessão. CSRF de A não vale na sessão de B. Teste com banco real. |
 | Segredos em log | Logs de acesso guardam evento, usuário, IP e user agent. Auditoria sem hash/senha/TOTP (teste). Configuração nomeia a variável e nunca o valor. Erro 500 loga só o tipo da exceção. |
 | Enumeração de contas | Mesma resposta, mesmo bloqueio e mesmo custo de hash para e-mail inexistente (teste). |
-| WebSocket entre sites (CSWSH) | Origin precisa ser o próprio host ou estar em `SINAIS_ORIGENS_PERMITIDAS`. |
+| WebSocket entre sites (CSWSH) | `Origin` precisa estar em `SINAIS_ORIGENS_PERMITIDAS` (ou ser o `X-Forwarded-Host` informado por um proxy confiável); senão, 4403. |
 | IP atrás de proxy | `SINAIS_PROXIES_CONFIAVEIS` (CIDRs): o `X-Forwarded-For` só é lido de proxies confiáveis, da direita para a esquerda, pulando os proxies. Ver "Passe de correções". |
 | Números inventados no resumo | Impossível por construção e verificado por teste em cinco cenários. |
 | Look-ahead na análise ao vivo | O motor usa o mesmo `montar_snapshot` do laboratório sobre candles fechados do banco. |
 
-Pendências menores registradas (não bloqueiam): a última análise não expira se o motor parar (o campo `t` mostra a idade); sem CAPTCHA após falhas repetidas (bloqueio progressivo cobre a força bruta); limite de requisições só no login; admin pode criar usuário em plano inativo; lote do motor que falha só é relido no reinício (o evento seguinte recarrega do banco).
+Pendências menores registradas (não bloqueiam): a última análise não expira se o motor parar (o campo `t` mostra a idade); sem CAPTCHA após falhas repetidas (bloqueio progressivo cobre a força bruta); limite de requisições só no login e na troca de senha; admin pode criar usuário em plano inativo. (Resolvido depois: o lote do motor que falha agora é retomado por `XAUTOCLAIM`, ver "Revisão de integração".)
 
 ## Decisões (onde o contrato é omisso)
 
@@ -140,7 +140,7 @@ Pendências menores registradas (não bloqueiam): a última análise não expira
 - Admin é dispensado de assinatura nas rotas de dados.
 - Com campeão no registro e sem motor de sinais, `/api/sinais` continua AGUARDAR com `motivo: "Modelo validado, mas o motor de sinais ao vivo ainda não está ativo"` e `modelo` preenchido. Nunca aparece probabilidade que não saiu do motor validado.
 - `/api/sinais/historico` e `/api/publico/estatisticas` devolvem `[]`: ainda não existem sinais gravados (motor de sinais e liquidador ficam para a continuação da Fase 7).
-- Canal `candles` só envia `fechado: true`: o coletor ainda não publica o candle em formação.
+- Canal `candles`: `fechado: false` (vela em formação, tick a tick, desde o serviço `ticks`) e `fechado: true` (1m oficial, só em `candles:SIMB:1m`).
 - `/api/candles`: `ate` é exclusivo (abertura `< ate`), padrão = agora; a janela de `limite` períodos termina no último dado existente.
 - WebSocket: erro por canal vai como `{"canal", "erro": {codigo, mensagem}}`; mensagem inválida como `{"erro": ...}`; até 20 canais por conexão.
 - Admin: `PATCH /api/admin/usuarios/{id}` e `PATCH /api/admin/planos/{id}`; `plano` na criação de usuário aceita id ou nome; e-mail ou nome de plano repetido → 409; a API cria só clientes (admins só pelo `criar_admin`, que provisiona o TOTP).
@@ -169,14 +169,14 @@ Cada correção tem teste que falhou antes (unitário com dublê que intercala a
 | 4 | WS mantinha canal de ativo que saiu do plano | A cada verificação periódica, cancela o canal e envia o quadro de erro | `test_plano_reduzido_durante_a_conexao_cancela_o_canal_do_ativo` |
 | 5 | Implantação atrás de Next/nginx | `SINAIS_PROXIES_CONFIAVEIS` (CIDRs, XFF pela direita); `Origin` do WS só por `SINAIS_ORIGENS_PERMITIDAS` (e `X-Forwarded-Host` só de proxy confiável); com `SINAIS_AMBIENTE=prod` as origens são obrigatórias e a chave do `.env.example` é recusada; padrão de dev aceita `http://localhost:3000` | `test_ip_do_cliente_anda_no_x_forwarded_for_...`, `test_origem_permitida_...`, `test_producao_exige_origens_...` |
 | 6 | Fonte de eventos do WS morria calada; `campeao.json` malformado | Tarefas de fundo supervisionadas (reinício com log); entrada ruim do stream registrada e pulada; registro malformado → AGUARDAR com log | `test_supervisor_...`, `test_entrada_ruim_no_stream_...`, `test_campeao_malformado_cai_para_aguardar` |
-| 7 | Motor travava num lote envenenado | Evento malformado → fila morta `candle.fechado.mortos` + ACK; falha de cálculo só reenvia o símbolo afetado; XPENDING/XCLAIM com no máximo 5 entregas; consumidor por `SINAIS_CONSUMIDOR` ou host | `test_evento_envenenado_...`, `test_falha_de_calculo_...`, `test_pendentes_...`, `test_nome_do_consumidor_...` |
+| 7 | Motor travava num lote envenenado | Evento malformado → fila morta `candle.fechado.mortos` + ACK; falha de cálculo só reenvia o símbolo afetado; XPENDING + XAUTOCLAIM (entre réplicas, mínimo ocioso de 60 s) com no máximo 5 entregas; consumidor por `SINAIS_CONSUMIDOR` ou host | `test_evento_envenenado_...`, `test_falha_de_calculo_...`, `test_pendentes_...`, `test_nome_do_consumidor_...` |
 | 8 | Admin não conseguia encerrar assinatura antes do fim | `POST /api/admin/assinaturas/{id}/encerrar` (auditado, vale na hora) | `test_encerrar_assinatura_...`, `test_admin_encerra_assinatura_...` |
 
 Menores corrigidos: cabeçalhos de segurança também no 500; AES-GCM com dado associado `usuario:{id}` e prefixo de chave `k1:`; e-mail tomado entre checagem e gravação → 409; limite de 5 trocas de senha por sessão em 15 min (429); volume do registro de modelos no Compose; resumo diz "Sem dados de tendência em …" quando falta histórico e nunca escreve distância negativa; rótulos de expiração num lugar só (`core.dominio.ROTULOS_EXPIRACAO`); layout aninhado demais e corpo ilegível → 422; candles de 3m a 1w com os minutos disponíveis e só períodos fechados (uma lacuna não some com o 1d ou 1w inteiro); migração com `ondelete` explícito, CHECK de expiração e vigência, índice único do payout vigente, índice de expiração das sessões e teste de downgrade. CI verde em `de91891`.
 
 ## Gráfico ao vivo tick a tick (1m a 1w)
 
-- `processos/ticks_binance.py` (serviço `ticks`): stream combinado `<simbolo>@aggTrade` com o mesmo consumidor do coletor (reconexão com backoff, renovação antes de 24 h). Publica cada negócio no Redis Pub/Sub `ticks:{SIMBOLO}` (não grava nada; os candles persistidos continuam vindo só dos klines fechados). Em toda (re)conexão, antes de ler o stream, republica pelo REST (`/api/v3/aggTrades`) os negócios do minuto atual.
+- `processos/ticks_binance.py` (serviço `ticks`): stream combinado `<simbolo>@aggTrade` com o mesmo consumidor do coletor (reconexão com backoff, renovação antes de 24 h). Publica cada negócio no Redis Pub/Sub `ticks:{SIMBOLO}` e o guarda no stream curto `ticks.recentes:{SIMBOLO}` (minuto atual e anterior; a API relê ao subir e quando o Pub/Sub reconecta). Não grava candles: os persistidos continuam vindo só dos klines fechados. Em toda (re)conexão com a Binance, antes de ler o stream, republica pelo REST (`/api/v3/aggTrades`) os negócios do minuto atual.
 - `dados/vela_formacao.py` (puro): para cada tempo gráfico, período atual = minutos de 1m oficiais (do banco, desde o início da semana) + negócios dos minutos abertos, cada um no minuto do seu `T`; primeiro/último pelo id do aggTrade (ordem de chegada não importa), repetidos descartados; o 1m oficial substitui o parcial e negócios com `T` anterior ao fim dele são descartados; lacuna de fechamentos → recarga do banco.
 - `api/velas.py`: publica `candles:SIMBOLO:TG` com `fechado: false` e `preco:SIMBOLO`, no máximo uma mensagem por canal a cada 100 ms (último valor vence), só nos canais com assinantes; foto imediata na assinatura. O `fechado: true` continua saindo do `candle.fechado`.
 
@@ -198,7 +198,7 @@ ETHUSDT: 925 aggTrades, 4 velas, igual=True
 
 Na mesma run: backend 459 passed, 31 skipped (cobertura 97,28%), integracao 31 passed, fumaça com "ticks recebidos em 15 s: 157". Testes unitários: negócio exatamente na abertura, fora de ordem e repetido, ressincronização sem duplicar, reconciliação, lacuna com recarga, virada da semana (segunda 00:00 UTC), vazão coalescida, foto na assinatura.
 
-## Acréscimos ao contrato (texto proposto)
+## Acréscimos ao contrato (incorporados ao `docs/api/contrato-v1.md` na revisão de integração)
 
 - **WebSocket, quadros de erro:** `{"canal": "<canal>", "erro": {"codigo", "mensagem"}}` (ex.: `ativo_nao_incluido`, `limite_canais`) e `{"erro": {"codigo": "mensagem_invalida", "mensagem"}}`. O frontend pode ignorar quadros com `erro`.
 - **WebSocket, fechamento:** 4401 sessão revogada/expirada, 4402 assinatura vencida, **4403** origem não permitida.
@@ -211,5 +211,30 @@ Na mesma run: backend 459 passed, 31 skipped (cobertura 97,28%), integracao 31 p
 ## Não feito nesta entrega
 
 - Motor de sinais (decisão por expiração), liquidador e monitor da Fase 7: dependem de um campeão aprovado.
-- Candle em formação no WebSocket: exige o coletor publicar um evento parcial (fora do escopo deste branch).
 - CAPTCHA, limite geral de requisições por sessão, exportação/exclusão de dados (LGPD) e testes de carga ficam para a Fase 11.
+
+## Revisão de integração (branch `integracao-correcoes`, base `db10af5`)
+
+Revisão independente da integração backend + frontend + infra. Cada correção teve teste que falhou antes (no backend, localmente ou no CI; no frontend, no CI: commit `bec0014` com 10 testes falhando, verdes em `f38b8a9`).
+
+| # | Problema | Correção | Teste |
+|---|---|---|---|
+| I1 | `fechado: true` de uma barra anterior (o 1m oficial chega 1–2 s depois dos primeiros ticks da barra seguinte) era descartado no navegador: a reconciliação nunca era aplicada | `SerieAoVivo` substitui a barra de mesmo `t` entre as últimas 5; o gráfico atualiza em ordem de tempo (`update(…, historicalUpdate)`); `IndicadoresIncrementais` recalcula daquela barra até o fim | `serie-ao-vivo.test.ts` › oficial depois de 3 ticks da barra seguinte; `indicadores-incrementais.test.ts` › oficial atrasado… bate com o cálculo completo |
+| I2 | API que reiniciava (ou Pub/Sub que reconectava) no meio do minuto perdia os negócios anteriores: O/H/L/V errados até o oficial | Serviço `ticks` grava cada negócio em `ticks.recentes:{SIMBOLO}` (stream com `MINID` no minuto anterior e validade de 3 min) **antes** do `PUBLISH`; a API relê a cada confirmação de assinatura do Pub/Sub; repetidos saem pelo id | `test_ticks_ressincronizacao.py` (reinício no meio do minuto), `test_redis_streams.py` › API que sobe no meio do minuto (Redis real) |
+| I3 | Primeiro 1m oficial aceito sem conferir lacuna quando nada tinha sido carregado: 4h/1d/1w só com aquele minuto | Primeiro oficial sempre pede recarga; com o banco atrás do evento, o oficial completa a soma e a recarga se repete no próximo | `test_vela_formacao.py` › primeiro oficial sem carga; `test_velas.py` › banco vazio na carga; banco atrasado |
+| I4 | `GET /api/sinais/historico` exigia `simbolo`; Perfil e "Todos" do Histórico recebiam 422 | `simbolo` opcional = todos os ativos do plano; explícito fora do plano continua 403 | `test_rotas.py` › historico sem simbolo; matriz de autorização; `perfil.test.tsx`, `tabela-historico.test.tsx` |
+| I5 | `frontend/README.md` sugeria `ws://127.0.0.1:8000`: cookie de outro host → 4401 em laço | README e guia indicam `ws://localhost:8000/api/ws` e "use localhost" | — (documentação) |
+| I6 | Teto global por e-mail: ~5 IPs trancavam o admin | Cookie assinado "dispositivo confiável" emitido no login isenta do teto global (o bloqueio por (e-mail, IP) continua); IPv6 por /64 | `test_servico_login.py` (3 casos), `test_rotas.py` › cookie de dispositivo |
+| I7 | `::ffff:127.0.0.1` não casava com `127.0.0.1/32` | `ipv4_mapped` na comparação com proxies e no IP do cliente | `test_puros.py` › IPv4 mapeado em IPv6 |
+| M1 | Motor estendia a janela antes do cálculo: nova tentativa ignorada como repetida | Janela só avança depois do cálculo e da publicação | `test_motor_analise.py` › falha no cálculo… não pula a nova tentativa |
+| M2 | Pendentes revisados só no próprio consumidor | `XPENDING` com idle + `XAUTOCLAIM` sobre o grupo (60 s) | `test_redis_streams.py` › XAUTOCLAIM toma pendentes de outra réplica (Redis real) |
+| M3 | Um `json.dumps` por assinante | Codificado uma vez por publicação, `send_text` | `test_puros.py` › codifica o JSON uma vez |
+| M8 | Produção aceitava `SINAIS_COOKIE_SEGURO=false`, origem `http://`, `SINAIS_DOCUMENTACAO=true` e a chave de exemplo escrita de outro jeito | Recusados com `SINAIS_AMBIENTE=prod`; chave comparada depois de decodificada | `test_config_api.py` › produção recusa configurações de desenvolvimento |
+| M10 | Contagem do rótulo parava em 00:00 sem tick novo; deslocamento do relógio pulava a cada resposta | Contagem avança pelo relógio para o próximo período; deslocamento = mediana das últimas 7 amostras do `Date` | `contagem-vela.test.ts`, `relogio.test.ts` |
+| M11 | Espera de ticks de canais não carregados crescia sem limite | No máximo 3 canais; descartada ao cancelar a assinatura e ao carregar outro canal | `serie-ao-vivo.test.ts` › espera limitada |
+| Admin | Sem botão para encerrar assinatura | "Encerrar" com confirmação em `/admin/usuarios` (`POST /api/admin/assinaturas/{id}/encerrar`); `UsuarioAdmin.assinatura_id` | `usuarios.test.tsx` › encerrar assinatura; `test_rotas.py` › assinatura_id |
+| M9 | Contrato desatualizado | `docs/api/contrato-v1.md` com tudo o que está implementado | — |
+
+**Ponta a ponta real (job `e2e-real` do CI):** sobe o Compose inteiro com `infra/dev.sh`, semeia um admin com 2FA, `next build` + `next start`, e o Playwright entra com o TOTP calculado no teste, abre `/terminal` e confere candles carregados, a barra em formação mudando com ticks reais da Binance em até 20 s, o gráfico com o último valor recebido, o painel de análise (ou "análise indisponível") e o WebSocket pelo rewrite do Next sem laço de reconexão.
+
+**Adiados (ledger):** M4, M5, M6, M7 e M12 da revisão de integração ficam para depois, por decisão registrada no pedido da correção (descrição no relatório da revisão).

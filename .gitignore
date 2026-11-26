@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 .env
+.env.e2e
+.env.ci
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/

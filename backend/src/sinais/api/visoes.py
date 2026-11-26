@@ -40,7 +40,10 @@ def usuario_saida(
 def usuario_admin(f: FichaUsuario, agora: InstanteMs) -> e.UsuarioAdmin:
     base = usuario_saida(f.usuario, f.assinatura, f.plano, agora)
     return e.UsuarioAdmin(
-        **base.model_dump(), status=f.usuario.status.value, criado_em=f.usuario.criado_em
+        **base.model_dump(),
+        status=f.usuario.status.value,
+        criado_em=f.usuario.criado_em,
+        assinatura_id=f.assinatura.id if f.assinatura is not None else None,
     )
 
 

@@ -95,6 +95,11 @@ class VelaEmFormacao:
         self._oficiais: dict[TempoGrafico, _Oficial] = {}
         self.precisa_recarregar = False
 
+    @property
+    def fechado_ate(self) -> InstanteMs | None:
+        """Fim do último 1m oficial aplicado (None: nenhum)."""
+        return self._fechado_ate
+
     # ---------------------------------------------------------- oficiais (1m)
     def carregar(self, fechados_1m: Sequence[Candle]) -> None:
         """Recomeça a partir dos candles de 1m oficiais do período atual (ordem crescente),
@@ -108,11 +113,13 @@ class VelaEmFormacao:
         self.precisa_recarregar = False
 
     def fechar_1m(self, c: Candle) -> bool:
-        """Reconcilia com o 1m oficial. Devolve se foi aplicado (repetido/antigo → False)."""
+        """Reconcilia com o 1m oficial. Devolve se foi aplicado (repetido/antigo → False).
+
+        Sem nenhum oficial carregado (banco vazio na carga) ou com lacuna antes deste, a soma
+        oficial dos períodos (4h, 1d, 1w...) ficaria incompleta: pede recarga do banco."""
         if self._fechado_ate is not None and c.abertura < self._fechado_ate:
             return False
-        if self._fechado_ate is not None and c.abertura > self._fechado_ate:
-            # Faltou um fechamento: a soma oficial dos períodos ficou incompleta.
+        if self._fechado_ate is None or c.abertura > self._fechado_ate:
             self.precisa_recarregar = True
         self._somar_oficial(c)
         self._fechado_ate = c.fechamento_ms

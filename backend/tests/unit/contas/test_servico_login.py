@@ -288,3 +288,153 @@ def test_hash_de_senha_roda_fora_do_laco_e_com_limite_de_paralelismo() -> None:
     h = asyncio.run(caso())
     assert threading.get_ident() not in h.threads
     assert h.maximo == 2
+
+
+async def falha(c: Awaitable[Any]) -> ErroConta:
+    with pytest.raises(ErroConta) as e:
+        await c
+    return e.value
+
+
+def _pol_global() -> Any:
+    from sinais.contas.limites import PoliticaLogin
+
+    return PoliticaLogin(falhas_globais_email=8, bloqueio_global_s=900)
+
+
+async def _travar_globalmente(amb: Any, email: str) -> None:
+    """Ataque distribuído: poucas tentativas em cada um de vários IPs."""
+    for i in range(8):
+        with pytest.raises(ErroConta):
+            await amb.servico.login(email, "x" * 10, None, f"7.7.7.{i}", "ua")
+
+
+def test_dispositivo_confiavel_escapa_do_teto_global_mas_nao_do_bloqueio_por_ip() -> None:
+    async def caso() -> None:
+        amb = ambiente(ParametrosContas(politica=_pol_global()))
+        await admin(amb)
+        r = await amb.servico.login(
+            "admin@exemplo.com", "senha-admin-123", codigo_totp(T0), "10.0.0.1", "ua"
+        )
+        assert r.dispositivo  # cookie assinado emitido no login bem-sucedido
+        await _travar_globalmente(amb, "admin@exemplo.com")
+        amb.relogio.avancar(31 * S)
+        # sem o cookie, de um IP novo: o teto global segura (o admin ficaria trancado)
+        e = await falha(
+            amb.servico.login(
+                "admin@exemplo.com", "senha-admin-123", codigo_totp(T0 + 31 * S), "10.0.0.2", "ua"
+            )
+        )  # noqa: E501
+        assert e.status == 423
+        # com o cookie do dispositivo: entra
+        r2 = await amb.servico.login(
+            "admin@exemplo.com",
+            "senha-admin-123",
+            codigo_totp(T0 + 31 * S),
+            "10.0.0.2",
+            "ua",
+            dispositivo=r.dispositivo,
+        )
+        assert r2.token and r2.dispositivo
+        # o bloqueio progressivo por (e-mail, IP) continua valendo para o dispositivo
+        for _ in range(5):
+            with pytest.raises(ErroConta):
+                await amb.servico.login(
+                    "admin@exemplo.com",
+                    "x" * 10,
+                    None,
+                    "10.0.0.3",
+                    "ua",
+                    dispositivo=r2.dispositivo,
+                )
+        e = await falha(
+            amb.servico.login(
+                "admin@exemplo.com",
+                "senha-admin-123",
+                codigo_totp(T0 + 31 * S),
+                "10.0.0.3",
+                "ua",
+                dispositivo=r2.dispositivo,
+            )
+        )
+        assert e.status == 423
+
+    rodar(caso())
+
+
+def test_cookie_de_dispositivo_forjado_de_outra_conta_ou_vencido_nao_isenta() -> None:
+    async def caso() -> None:
+        from sinais.contas.servico import ParametrosContas as P
+
+        amb = ambiente(P(politica=_pol_global(), dispositivo_validade_ms=60 * M))
+        await admin(amb)
+        await cliente(amb)
+        ana = await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "1.1.1.1", "ua")
+        adm = await amb.servico.login(
+            "admin@exemplo.com", "senha-admin-123", codigo_totp(T0), "1.1.1.1", "ua"
+        )
+        await _travar_globalmente(amb, "admin@exemplo.com")
+        amb.relogio.avancar(31 * S)
+        agora = T0 + 31 * S
+        adulterado = adm.dispositivo[:-2] + ("AA" if adm.dispositivo[-2:] != "AA" else "BB")
+        for falso in (ana.dispositivo, adulterado, "lixo", ""):
+            e = await falha(
+                amb.servico.login(
+                    "admin@exemplo.com",
+                    "senha-admin-123",
+                    codigo_totp(agora),
+                    "2.2.2.2",
+                    "ua",
+                    dispositivo=falso,
+                )
+            )
+            assert e.status == 423, falso
+        amb.relogio.avancar(61 * M)  # cookie vencido (e o bloqueio global de 15 min também)
+        await _travar_globalmente(amb, "admin@exemplo.com")
+        amb.relogio.avancar(31 * S)
+        agora = amb.relogio.agora_ms()
+        e = await falha(
+            amb.servico.login(
+                "admin@exemplo.com",
+                "senha-admin-123",
+                codigo_totp(agora),
+                "2.2.2.3",
+                "ua",
+                dispositivo=adm.dispositivo,
+            )
+        )
+        assert e.status == 423
+
+    rodar(caso())
+
+
+def test_ipv6_conta_por_bloco_64_no_bloqueio_e_no_limite_por_ip() -> None:
+    from sinais.contas.limites import chave_ip
+
+    assert (
+        chave_ip("2001:db8:1:2:aaaa::1") == chave_ip("2001:db8:1:2:ffff::9") == "2001:db8:1:2::/64"
+    )
+    assert chave_ip("2001:db8:1:3::1") != chave_ip("2001:db8:1:2::1")
+    assert chave_ip("203.0.113.7") == "203.0.113.7"
+    assert chave_ip("desconhecido") == "desconhecido"
+
+    async def caso() -> None:
+        amb = ambiente()
+        await cliente(amb)
+        # cinco falhas, cada uma de um endereço diferente do mesmo /64: bloqueia o bloco
+        for i in range(5):
+            with pytest.raises(ErroConta):
+                await amb.servico.login(
+                    "ana@exemplo.com", "x" * 10, None, f"2001:db8::{i + 1}", "u"
+                )
+        e = await falha(
+            amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "2001:db8::99", "u")
+        )
+        assert e.status == 423
+        # outro /64 não é afetado
+        r = await amb.servico.login(
+            "ana@exemplo.com", "senha-forte-123", None, "2001:db8:0:1::1", "u"
+        )
+        assert r.token
+
+    rodar(caso())

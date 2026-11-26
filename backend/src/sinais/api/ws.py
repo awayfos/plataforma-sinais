@@ -20,6 +20,7 @@ from sinais.api.sinais_ao_vivo import EXPIRACOES, sinais_para
 from sinais.api.ws_canais import (
     Distribuidor,
     ErroMensagem,
+    codificar,
     de_proxy_confiavel,
     interpretar,
     origem_permitida,
@@ -129,6 +130,9 @@ class ConexaoWs:
             msg = await self._assinante.fila.get()
             if self._vencida():
                 raise _Fechar(FECHA_ASSINATURA)
+            if isinstance(msg, str):  # já codificado uma vez na publicação
+                await self._ws.send_text(msg)
+                continue
             canal = msg.get("canal", "")
             if canal.startswith("sinais:") and isinstance(msg.get("dados"), list) and self._ctx:
                 permitidas = set(expiracoes_permitidas(self._ctx, EXPIRACOES))
@@ -136,7 +140,7 @@ class ConexaoWs:
                     **msg,
                     "dados": [x for x in msg["dados"] if x.get("expiracao") in permitidas],
                 }
-            await self._ws.send_json(msg)
+            await self._ws.send_text(codificar(msg))
 
     async def _verificar(self) -> None:
         while True:

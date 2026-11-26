@@ -84,9 +84,19 @@ def origem_permitida(
     return False
 
 
+# Mensagem na fila de um assinante: texto JSON já pronto (publicação para muitos, codificada
+# uma vez só) ou objeto (mensagens da própria conexão e sinais, filtrados por plano no envio).
+type Mensagem = str | dict[str, Any]
+
+
+def codificar(mensagem: dict[str, Any]) -> str:
+    """JSON compacto, igual ao ``send_json`` do Starlette."""
+    return json.dumps(mensagem, ensure_ascii=False, separators=(",", ":"))
+
+
 @dataclass(eq=False)
 class Assinante:
-    fila: asyncio.Queue[dict[str, Any]]
+    fila: asyncio.Queue[Mensagem]
     canais: set[str] = field(default_factory=set)
 
 
@@ -115,7 +125,7 @@ class Distribuidor:
             self.cancelar(a, canal)
 
     @staticmethod
-    def entregar(a: Assinante, mensagem: dict[str, Any]) -> None:
+    def entregar(a: Assinante, mensagem: Mensagem) -> None:
         """Cliente lento perde a mensagem mais antiga, nunca trava os outros."""
         if a.fila.full():
             a.fila.get_nowait()
@@ -125,9 +135,15 @@ class Distribuidor:
         return bool(self._por_canal.get(canal))
 
     def publicar(self, canal: str, dados: Any) -> int:
-        grupo = self._por_canal.get(canal, set())
+        """Entrega a todos os assinantes do canal com um único ``json.dumps`` (os sinais seguem
+        como objeto: cada conexão filtra as expirações do próprio plano)."""
+        grupo = self._por_canal.get(canal)
+        if not grupo:
+            return 0
+        objeto = {"canal": canal, "dados": dados}
+        mensagem: Mensagem = objeto if canal.startswith("sinais:") else codificar(objeto)
         for a in grupo:
-            self.entregar(a, {"canal": canal, "dados": dados})
+            self.entregar(a, mensagem)
         return len(grupo)
 
 
@@ -164,10 +180,20 @@ type RedeIp = IPv4Network | IPv6Network
 
 
 def _endereco(texto: str | None) -> IPv4Address | IPv6Address | None:
+    """Endereço lido do texto; IPv4 mapeado em IPv6 (``::ffff:1.2.3.4``, comum em sockets
+    dual-stack) vira o IPv4, para casar com as redes de proxy e com os contadores de limite."""
     try:
-        return ip_address((texto or "").strip())
+        ip = ip_address((texto or "").strip())
     except ValueError:
         return None
+    if isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    return ip
+
+
+def _normalizado(texto: str | None) -> str | None:
+    ip = _endereco(texto)
+    return str(ip) if ip is not None else texto
 
 
 def de_proxy_confiavel(conexao: str | None, proxies: Sequence[RedeIp]) -> bool:
@@ -181,10 +207,11 @@ def ip_do_cliente(conexao: str | None, encaminhado: str | None, proxies: Sequenc
     confiáveis (Next, nginx) e fica com o primeiro endereço de fora. O que está à esquerda dele
     veio do cliente e pode ser forjado."""
     if not de_proxy_confiavel(conexao, proxies) or not encaminhado:
-        return (conexao or "desconhecido")[:64]
+        return (_normalizado(conexao) or "desconhecido")[:64]
     entradas = [e.strip() for e in encaminhado.split(",") if e.strip()]
     for entrada in reversed(entradas):
         ip = _endereco(entrada)
         if ip is None or not any(ip in rede for rede in proxies):
-            return entrada[:64]
-    return (entradas[0] if entradas else conexao or "desconhecido")[:64]
+            return (str(ip) if ip is not None else entrada)[:64]
+    primeiro = _normalizado(entradas[0]) if entradas else _normalizado(conexao)
+    return (primeiro or "desconhecido")[:64]

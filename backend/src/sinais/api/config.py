@@ -63,6 +63,29 @@ class ConfiguracaoApi(BaseModel):
         return v
 
 
+def _decodificada(texto: str) -> bytes:
+    return base64.urlsafe_b64decode(texto.encode())
+
+
+def _exigir_producao(cfg: ConfiguracaoApi) -> None:
+    """Recusa em produção o que só serve no desenvolvimento (nunca cita valores)."""
+
+    def recusar(variavel: str, motivo: str) -> None:
+        raise ErroConfiguracao(f"configuração inválida: {variavel} ({motivo})")
+
+    # Compara os bytes: a mesma chave escrita de outro jeito também é a de exemplo.
+    if _decodificada(cfg.chave_cifra.get_secret_value()) == _decodificada(CHAVE_DE_EXEMPLO):
+        recusar("SINAIS_CHAVE_CIFRA", "chave de exemplo em produção")
+    if not cfg.origens_permitidas:
+        recusar("SINAIS_ORIGENS_PERMITIDAS", "obrigatória em produção")
+    elif any(not o.startswith("https://") for o in cfg.origens_permitidas):
+        recusar("SINAIS_ORIGENS_PERMITIDAS", "só https:// em produção")
+    if not cfg.cookie_seguro:
+        recusar("SINAIS_COOKIE_SEGURO", "cookies sem Secure só no desenvolvimento")
+    if cfg.documentacao:
+        recusar("SINAIS_DOCUMENTACAO", "documentação interativa só no desenvolvimento")
+
+
 _VARIAVEIS = {campo: f"SINAIS_{campo.upper()}" for campo in ConfiguracaoApi.model_fields}
 
 
@@ -79,14 +102,7 @@ def carregar_configuracao_api(env: Mapping[str, str] | None = None) -> Configura
             problemas.append(f"{_VARIAVEIS.get(campo, campo)} ({motivo})")
         raise ErroConfiguracao("configuração inválida: " + ", ".join(problemas)) from None
     if cfg.ambiente == "prod":
-        if cfg.chave_cifra.get_secret_value() == CHAVE_DE_EXEMPLO:
-            raise ErroConfiguracao(
-                "configuração inválida: SINAIS_CHAVE_CIFRA (chave de exemplo em produção)"
-            )
-        if not cfg.origens_permitidas:
-            raise ErroConfiguracao(
-                "configuração inválida: SINAIS_ORIGENS_PERMITIDAS (obrigatória em produção)"
-            )
+        _exigir_producao(cfg)
     elif not cfg.origens_permitidas:
         cfg = cfg.model_copy(update={"origens_permitidas": ORIGENS_DESENVOLVIMENTO})
     return cfg

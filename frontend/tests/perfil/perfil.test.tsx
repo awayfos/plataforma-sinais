@@ -12,7 +12,7 @@ vi.mock("next/navigation", async () => {
 
 describe("Perfil", () => {
   it("usuário sem assinatura (plano null) mostra 'Sem plano'", async () => {
-    simularFetch((c) => {
+    const chamadas = simularFetch((c) => {
       if (caminho(c.url) === "/api/eu")
         return { corpo: { ...usuarioTeste, assinatura: { plano: null, status: "vencida", vence_em: null } } };
       if (caminho(c.url) === "/api/sinais/historico") return { corpo: [] };
@@ -24,5 +24,9 @@ describe("Perfil", () => {
       </ProvedorSessao>,
     );
     expect(await screen.findByTestId("perfil-plano")).toHaveTextContent("Sem plano");
+    // resumo dos últimos 30 dias de todos os ativos: sem simbolo (aceito pelo backend)
+    await vi.waitFor(() => expect(chamadas.some((c) => caminho(c.url) === "/api/sinais/historico")).toBe(true));
+    const h = chamadas.find((c) => caminho(c.url) === "/api/sinais/historico")!;
+    expect(new URL(h.url, "http://x").searchParams.has("simbolo")).toBe(false);
   });
 });

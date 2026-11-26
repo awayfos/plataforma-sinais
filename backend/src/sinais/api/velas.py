@@ -77,9 +77,14 @@ class GestorVelas:
         self._velas = {s: VelaEmFormacao(s) for s in simbolos}
         self._mudaram: set[str] = set()
 
-    async def carregar(self, simbolos: Sequence[str] | None = None) -> None:
-        """1m oficiais do banco desde o início da semana atual (o maior tempo gráfico)."""
-        agora = self._relogio.agora_ms()
+    @property
+    def simbolos(self) -> tuple[str, ...]:
+        return tuple(self._velas)
+
+    async def carregar(self, simbolos: Sequence[str] | None = None, ate: int = 0) -> None:
+        """1m oficiais do banco desde o início da semana atual (o maior tempo gráfico) até
+        agora (ou até ``ate``, o fim do evento que pediu a recarga, se for depois)."""
+        agora = max(self._relogio.agora_ms(), ate)
         inicio = abertura_candle(agora, TempoGrafico.W1)
         for s in simbolos or list(self._velas):
             fechados = await self._repo.listar(s, IntervaloColeta.M1, inicio, agora + _M)
@@ -99,7 +104,11 @@ class GestorVelas:
         if v.fechar_1m(c):
             self._mudaram.add(c.simbolo)
         if v.precisa_recarregar:
-            await self.carregar([c.simbolo])
+            await self.carregar([c.simbolo], ate=c.fechamento_ms)
+            if v.fechado_ate is None or v.fechado_ate < c.fechamento_ms:
+                # Banco atrás do evento: o oficial recebido completa a soma; se ainda houver
+                # lacuna (ou nada no banco), fica pedindo recarga até o banco alcançar.
+                v.fechar_1m(c)
 
     def vela_oficial_ok(self, simbolo: str) -> bool:
         return not self._velas[simbolo].precisa_recarregar

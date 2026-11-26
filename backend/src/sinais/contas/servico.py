@@ -14,10 +14,17 @@ from typing import Any, NoReturn
 
 from sinais.contas.autorizacao import pode_modo_avancado
 from sinais.contas.contexto import Contexto
-from sinais.contas.limites import ContadorLimites, PoliticaLogin
+from sinais.contas.limites import ContadorLimites, PoliticaLogin, chave_ip
 from sinais.contas.modelos import Modo, Papel, Sessao, StatusUsuario, Usuario
 from sinais.contas.repositorio import RepositorioContas
-from sinais.contas.seguranca import CifraSegredos, ErroCifra, gerar_token, hash_token, iguais
+from sinais.contas.seguranca import (
+    AssinadorDispositivos,
+    CifraSegredos,
+    ErroCifra,
+    gerar_token,
+    hash_token,
+    iguais,
+)
 from sinais.contas.senhas import Hasher
 from sinais.contas.totp import VerificadorTotp
 from sinais.core.tempo import Relogio
@@ -66,6 +73,8 @@ class ParametrosContas:
     politica: PoliticaLogin = PoliticaLogin()
     # Argon2id custa CPU e memória: roda em threads, no máximo ``hash_paralelo`` por vez.
     hash_paralelo: int = 4
+    # Validade do cookie "dispositivo confiável" (renovado a cada login).
+    dispositivo_validade_ms: int = 90 * _DIA_MS
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +82,8 @@ class ResultadoLogin:
     usuario: Usuario
     token: str
     csrf: str
+    # Cookie "dispositivo confiável" (assinado, amarrado ao e-mail) emitido no login.
+    dispositivo: str = ""
 
 
 class ServicoContas:
@@ -94,6 +105,7 @@ class ServicoContas:
         self.relogio = relogio
         self.params = params or ParametrosContas()
         self._semaforo_hash = asyncio.Semaphore(self.params.hash_paralelo)
+        self._dispositivos = AssinadorDispositivos(cifra.derivar("dispositivo-confiavel"))
         # Hash de uma senha aleatória descartada: e-mail inexistente gasta o mesmo tempo.
         self._hash_ficticio = hasher.gerar(gerar_token())
 
@@ -107,17 +119,27 @@ class ServicoContas:
 
     # ------------------------------------------------------------------ login
     async def login(
-        self, email: str, senha: str, totp: str | None, ip: str, user_agent: str
+        self,
+        email: str,
+        senha: str,
+        totp: str | None,
+        ip: str,
+        user_agent: str,
+        dispositivo: str | None = None,
     ) -> ResultadoLogin:
         agora = self.relogio.agora_ms()
         email = normalizar_email(email)
         # Bloqueio por (e-mail, IP): quem erra a senha de outra pessoa trava só a si mesmo.
-        # Um teto global por e-mail, bem mais alto, segura o ataque distribuído em vários IPs.
-        # As chaves usam hash, existente ou não o e-mail (sem enumeração de contas).
+        # Um teto global por e-mail, bem mais alto, segura o ataque distribuído em vários IPs;
+        # o dispositivo em que a conta já entrou (cookie assinado) não é barrado por ele.
+        # As chaves usam hash, existente ou não o e-mail (sem enumeração de contas); IPv6
+        # conta por bloco /64.
         chave_email = hashlib.sha256(email.encode()).hexdigest()
-        chave = hashlib.sha256(f"{email}|{ip}".encode()).hexdigest()
+        ip_limite = chave_ip(ip)
+        chave = hashlib.sha256(f"{email}|{ip_limite}".encode()).hexdigest()
+        confiavel = self._dispositivos.valido(dispositivo, email, agora)
         pol = self.params.politica
-        n_ip = await self._contador.incrementar(f"login:ip:{ip}", pol.janela_s)
+        n_ip = await self._contador.incrementar(f"login:ip:{ip_limite}", pol.janela_s)
         n_email = await self._contador.incrementar(f"login:email:{chave}", pol.janela_s)
         usuario = await self.repo.usuario_por_email(email)
         uid = usuario.id if usuario else None
@@ -127,7 +149,9 @@ class ServicoContas:
                 429, "muitas_tentativas", "Muitas tentativas. Aguarde um minuto e tente de novo."
             )
         bloqueio = await self._contador.ler(f"login:bloqueio:{chave}")
-        global_ = await self._contador.ler(f"login:bloqueio_global:{chave_email}")
+        global_ = (
+            None if confiavel else await self._contador.ler(f"login:bloqueio_global:{chave_email}")
+        )
         if global_ is not None and (bloqueio is None or int(global_) > int(bloqueio)):
             bloqueio = global_
         if bloqueio is not None and int(bloqueio) > agora:
@@ -159,7 +183,9 @@ class ServicoContas:
             novo_hash = await self.gerar_hash(senha)
             await self.repo.atualizar_usuario(usuario.id, {"senha_hash": novo_hash})
             usuario = replace(usuario, senha_hash=novo_hash)
-        return await self._abrir_sessao(usuario, ip, user_agent, agora)
+        resultado = await self._abrir_sessao(usuario, ip, user_agent, agora)
+        validade = self.params.dispositivo_validade_ms
+        return replace(resultado, dispositivo=self._dispositivos.emitir(email, agora + validade))
 
     async def _falha(
         self,

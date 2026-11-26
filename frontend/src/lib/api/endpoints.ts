@@ -64,6 +64,9 @@ export const api = {
     editarPlano: (dados: Plano) => requisicao<Plano>("/api/admin/planos", { metodo: "PATCH", corpo: dados }),
     salvarAssinatura: (dados: NovaAssinatura) =>
       requisicao<unknown>("/api/admin/assinaturas", { metodo: "POST", corpo: dados }),
+    /** Antecipa o fim da assinatura para agora (o cliente perde o acesso na hora). */
+    encerrarAssinatura: (id: Id) =>
+      requisicao<unknown>(`/api/admin/assinaturas/${encodeURIComponent(String(id))}/encerrar`, { metodo: "POST" }),
     acessos: (p: { usuario_id?: Id }, sinal?: AbortSignal) =>
       requisicao<EventoAcesso[]>(`/api/admin/acessos${consulta({ usuario_id: p.usuario_id })}`, { sinal }),
     auditoria: (sinal?: AbortSignal) => requisicao<EventoAuditoria[]>("/api/admin/auditoria", { sinal }),

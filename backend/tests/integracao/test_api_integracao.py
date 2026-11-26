@@ -246,7 +246,7 @@ def test_tick_do_pubsub_chega_ao_distribuidor_como_vela_em_formacao(amb: Ambient
         amb.chamar(amb.redis.publish, canal_ticks("BTCUSDT"), para_payload("BTCUSDT", n))
         time.sleep(0.1)
         if not amb.chamar(assinante.fila.empty):
-            recebida = amb.chamar(assinante.fila.get_nowait)
+            recebida = json.loads(amb.chamar(assinante.fila.get_nowait))
             break
     assert recebida == {
         "canal": "candles:BTCUSDT:1m",

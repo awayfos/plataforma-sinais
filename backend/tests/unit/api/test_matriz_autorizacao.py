@@ -26,6 +26,7 @@ MATRIZ: list[tuple[str, str, Any, tuple[int, ...]]] = [
     ("GET", "/api/sinais?simbolo=BTCUSDT", None, (401, 402, 402, 200, 200, 200)),
     ("GET", "/api/sinais?simbolo=ETHUSDT", None, (401, 402, 402, 403, 200, 200)),
     ("GET", "/api/sinais/historico?simbolo=BTCUSDT", None, (401, 402, 402, 200, 200, 200)),
+    ("GET", "/api/sinais/historico", None, (401, 402, 402, 200, 200, 200)),
     ("PATCH", "/api/eu/preferencias", {"modo": "avancado"}, (401, 200, 403, 403, 200, 200)),
     ("GET", "/api/publico/estatisticas", None, (200,) * 6),
     ("GET", "/api/admin/usuarios", None, (401, 403, 403, 403, 403, 200)),

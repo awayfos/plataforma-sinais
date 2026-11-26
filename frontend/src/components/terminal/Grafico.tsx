@@ -19,7 +19,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { AgrupadorQuadros } from "@/lib/agrupador";
 import type { Candle, CandleAoVivo, Desenho, IndicadoresGrafico, TempoGrafico } from "@/lib/api/tipos";
-import { TEMPOS_DIARIOS, duracaoTempo, legendaVisivel, numero, tempoDoGrafico } from "@/lib/candles";
+import { TEMPOS_DIARIOS, duracaoTempo, legendaVisivel, numero, proximoFechamento, tempoDoGrafico } from "@/lib/candles";
 import { formatarContagemVela, formatarPreco } from "@/lib/formato";
 import type { CandleNumerico, Serie } from "@/lib/indicadores";
 import { IndicadoresIncrementais } from "@/lib/indicadoresIncrementais";
@@ -105,10 +105,17 @@ function preencherIndicadores(s: SeriesIndicadores, inc: IndicadoresIncrementais
   s.macdHist?.setData(x.macdHist.map((h, i) => (h === null ? { time: tempos[i]! } : { time: tempos[i]!, value: h, color: corHist(h) })));
 }
 
-/** Tick: só o ponto da barra tocada (update), sem setData. */
-function atualizarIndicadores(s: SeriesIndicadores, inc: IndicadoresIncrementais, i: number, time: UTCTimestamp): void {
+/** Tick: só o ponto da barra tocada (update), sem setData. `historico`: a barra não é a última (oficial atrasado). */
+function atualizarIndicadores(
+  s: SeriesIndicadores,
+  inc: IndicadoresIncrementais,
+  i: number,
+  time: UTCTimestamp,
+  historico = false,
+): void {
   const p = inc.ponto(i);
-  const up = (serie: ISeriesApi<"Line"> | undefined, v: number | null) => serie?.update(v === null ? { time } : { time, value: v });
+  const up = (serie: ISeriesApi<"Line"> | undefined, v: number | null) =>
+    serie?.update(v === null ? { time } : { time, value: v }, historico);
   up(s.ema9, p.ema9);
   up(s.ema21, p.ema21);
   up(s.bbSup, p.bbSup);
@@ -118,7 +125,7 @@ function atualizarIndicadores(s: SeriesIndicadores, inc: IndicadoresIncrementais
   up(s.rsi, p.rsi);
   up(s.macd, p.macd);
   up(s.macdSinal, p.macdSinal);
-  s.macdHist?.update(p.macdHist === null ? { time } : { time, value: p.macdHist, color: corHist(p.macdHist) });
+  s.macdHist?.update(p.macdHist === null ? { time } : { time, value: p.macdHist, color: corHist(p.macdHist) }, historico);
 }
 
 const SEM_ROTULO = { lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false } as const;
@@ -205,10 +212,9 @@ export function Grafico({
     const v = velas.current;
     const ultimo = serie.candles.at(-1);
     if (!v || !ultimo) return;
-    const dur = duracaoTempo(tempoRef.current);
-    // Barra fechada sem formação ainda: a próxima fecha uma duração depois.
-    const fecha = ultimo.t + (ultimo.fechado ? 2 : 1) * dur;
-    const title = formatarContagemVela(fecha - agoraServidor(Date.now()));
+    const agora = agoraServidor(Date.now());
+    const fecha = proximoFechamento(ultimo.t, duracaoTempo(tempoRef.current), agora);
+    const title = formatarContagemVela(fecha - agora);
     const color = numero(ultimo.c) >= numero(ultimo.o) ? COR.alta : COR.baixa;
     const price = numero(ultimo.c);
     if (!linhaPreco.current) {
@@ -232,21 +238,28 @@ export function Grafico({
     if (simbolo && ultimo) publicarPreco(simbolo, ultimo.c);
   }
 
-  /** Um quadro de ticks: aplica na série e atualiza só as barras tocadas. */
+  /**
+   * Um quadro de ticks: aplica na série e atualiza só as barras tocadas, em ordem de tempo. Uma barra anterior
+   * à última (1m oficial atrasado) usa a atualização histórica do gráfico, e os indicadores são reescritos
+   * dela até o fim (dependem das barras anteriores).
+   */
   function descarregar(itens: { canal: string; tick: CandleAoVivo }[]) {
     const v = velas.current;
     const vol = volume.current;
     if (!v || !vol) return;
     const tocados = serie.aplicarLote(itens);
     if (tocados.length === 0) return;
+    const ultimo = serie.candles.length - 1;
+    const tempos = (i: number) => paraTempo(serie.candles[i]!.t, tempoRef.current);
+    let desde = Infinity;
     for (const i of tocados) {
       const k = serie.candles[i]!;
-      const time = paraTempo(k.t, tempoRef.current);
-      v.update(barra(k, time));
-      vol.update(barraVolume(k, time));
-      const r = inc.aplicar(numerico(k));
-      atualizarIndicadores(ind.current, inc, r.indice, time);
+      const time = tempos(i);
+      v.update(barra(k, time), i < ultimo);
+      vol.update(barraVolume(k, time), i < ultimo);
+      desde = Math.min(desde, inc.aplicar(numerico(k)).desde);
     }
+    for (let i = desde; i <= ultimo; i++) atualizarIndicadores(ind.current, inc, i, tempos(i), i < ultimo);
     aposMudanca();
   }
 
@@ -417,6 +430,11 @@ export function Grafico({
 
   // Ticks ao vivo: enfileirados e aplicados uma vez por quadro (sem re-render do React).
   useCanal(canal, (tick, origem) => agrupador.current?.enfileirar({ canal: origem, tick }));
+  // Ao trocar de canal (cancelar a assinatura), o que ficou guardado dele é descartado.
+  useEffect(() => {
+    if (!canal) return;
+    return () => serie.descartarEspera(canal);
+  }, [canal, serie]);
 
   // Contagem até o fechamento no rótulo do preço.
   useEffect(() => {
