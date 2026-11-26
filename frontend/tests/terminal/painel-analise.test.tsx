@@ -33,6 +33,27 @@ describe("PainelAnalise", () => {
     expect(screen.getByTestId("tendencia-1h")).not.toHaveTextContent("Lateral");
   });
 
+  it("valores nulos da análise aparecem como — sem quebrar", () => {
+    const analise = {
+      ...analiseTeste,
+      forca_tendencia: null,
+      volume: { relativo: null, pressao_compradora: null },
+      indicadores: { rsi: null, macd_hist: null, estoc_k: null, bb_pct: null, atr: null },
+      price_action: { impulso: null, desaceleracao: null, lateral: false },
+    };
+    render(<PainelAnalise analise={analise} modo="avancado" aberto />);
+    expect(screen.getByTestId("volume-relativo")).toHaveTextContent("—");
+    expect(screen.getByTestId("pressao-compradora")).toHaveTextContent("—");
+    expect(screen.queryByRole("img", { name: /Compradores/ })).toBeNull();
+    expect(screen.getByText("RSI").closest("div")).toHaveTextContent("—");
+    expect(screen.queryByText(/NaN/)).toBeNull();
+  });
+
+  it("t é a abertura do último candle de 1m fechado: mostra o intervalo do minuto", () => {
+    render(<PainelAnalise analise={{ ...analiseTeste, t: Date.parse("2026-11-25T13:30:00Z") }} modo="essencial" aberto />);
+    expect(screen.getByTestId("minuto-analise")).toHaveTextContent("10:30–10:31");
+  });
+
   it("evento de estrutura legível", () => {
     render(<PainelAnalise analise={analiseTeste} modo="essencial" aberto />);
     expect(screen.getByText(/Rompimento de estrutura para cima/)).toBeInTheDocument();

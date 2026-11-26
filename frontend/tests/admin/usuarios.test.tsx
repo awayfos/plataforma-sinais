@@ -50,6 +50,41 @@ describe("GestaoUsuarios", () => {
     });
   });
 
+  it("redefinir senha envia PATCH {senha_temporaria} validada", async () => {
+    const chamadas = backend();
+    const user = userEvent.setup();
+    render(<GestaoUsuarios />);
+    const linha = (await screen.findByText("ana@teste.local")).closest("tr")!;
+    await user.click(within(linha).getByRole("button", { name: "Redefinir senha de Ana Souza" }));
+    const campo = within(linha).getByLabelText("Nova senha temporária");
+    await user.type(campo, "curta");
+    await user.click(within(linha).getByRole("button", { name: "Salvar senha" }));
+    expect(within(linha).getByRole("alert")).toHaveTextContent("A senha temporária precisa ter pelo menos 10 caracteres.");
+    expect(chamadas.some((c) => c.metodo === "PATCH")).toBe(false);
+    await user.clear(campo);
+    await user.type(campo, "temporaria-123");
+    await user.click(within(linha).getByRole("button", { name: "Salvar senha" }));
+    await vi.waitFor(() => {
+      const patch = chamadas.find((c) => c.metodo === "PATCH")!;
+      expect(caminho(patch.url)).toBe("/api/admin/usuarios/7");
+      expect(patch.corpo).toEqual({ senha_temporaria: "temporaria-123" });
+    });
+  });
+
+  it("criar envia o id numérico do plano", async () => {
+    const chamadas = backend();
+    const user = userEvent.setup();
+    render(<GestaoUsuarios />);
+    await screen.findByText("ana@teste.local");
+    await user.click(screen.getByRole("button", { name: "Novo usuário" }));
+    const form = screen.getByRole("form", { name: "Novo usuário" });
+    await user.type(within(form).getByLabelText("E-mail"), "novo@teste.local");
+    await user.type(within(form).getByLabelText("Nome"), "Novo Cliente");
+    await user.type(within(form).getByLabelText("Senha temporária"), "temporaria-123");
+    await user.click(within(form).getByRole("button", { name: "Criar usuário" }));
+    await vi.waitFor(() => expect(chamadas.find((c) => c.metodo === "POST")?.corpo).toMatchObject({ plano: 1 }));
+  });
+
   it("criar valida a senha temporária", async () => {
     const chamadas = backend();
     const user = userEvent.setup();

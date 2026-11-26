@@ -129,6 +129,37 @@ describe("ClienteTempoReal", () => {
     expect(aoFalhasSeguidas).not.toHaveBeenCalled();
   });
 
+  it("quadro de erro do canal vai para o ouvinte de erro, nunca como dados", () => {
+    const { cliente, sockets } = montar();
+    const dados = vi.fn();
+    const erro = vi.fn();
+    cliente.assinar("sinais:BTCUSDT", dados, erro);
+    sockets[0]!.abrir();
+    sockets[0]!.receber({ canal: "sinais:BTCUSDT", erro: { codigo: "ativo_nao_incluido", mensagem: "Ativo não incluído no seu plano." } });
+    expect(dados).not.toHaveBeenCalled();
+    expect(erro).toHaveBeenCalledWith({ codigo: "ativo_nao_incluido", mensagem: "Ativo não incluído no seu plano." });
+    sockets[0]!.receber({ erro: { codigo: "mensagem_invalida", mensagem: "x" } });
+    expect(dados).not.toHaveBeenCalled();
+  });
+
+  it("modo lento: status indisponível e nova tentativa a cada minuto até conectar", () => {
+    const status: string[] = [];
+    const { cliente, sockets, agendados } = montar({ aoMudarStatus: (s) => status.push(s) });
+    cliente.assinar("sinais:BTCUSDT", () => {});
+    sockets[0]!.cair(1006);
+    cliente.desacelerar();
+    expect(status.at(-1)).toBe("indisponivel");
+    agendados[0]!.fn();
+    sockets[1]!.cair(1006);
+    expect(agendados[1]!.ms).toBe(60_000);
+    expect(status.at(-1)).toBe("indisponivel");
+    agendados[1]!.fn();
+    sockets[2]!.abrir();
+    expect(status.at(-1)).toBe("conectado");
+    sockets[2]!.cair(1006);
+    expect(agendados[2]!.ms).toBe(500);
+  });
+
   it("ignora mensagens inválidas", () => {
     const { cliente, sockets } = montar();
     const f = vi.fn();

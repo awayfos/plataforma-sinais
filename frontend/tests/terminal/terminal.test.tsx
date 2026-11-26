@@ -97,6 +97,26 @@ describe("Terminal com tempo real", () => {
     await vi.waitFor(() => expect(screen.queryByText(/desatualizad/i)).toBeNull());
   });
 
+  it("erro do canal (ativo fora do plano) aparece para o usuário", async () => {
+    await conectar();
+    act(() =>
+      sockets[0]!.receber({ canal: "sinais:BTCUSDT", erro: { codigo: "ativo_nao_incluido", mensagem: "Ativo não incluído no seu plano." } }),
+    );
+    expect(await screen.findByText("Ativo não incluído no seu plano.")).toBeInTheDocument();
+    expect(screen.getAllByText("AGUARDAR")).toHaveLength(5);
+  });
+
+  it("handshake recusado com sessão válida: para o laço rápido e avisa que o ao vivo está indisponível", async () => {
+    await conectar();
+    act(() => sockets[0]!.cair(1006));
+    act(() => agendados[0]!());
+    act(() => sockets[1]!.cair(1006));
+    act(() => agendados[1]!());
+    act(() => sockets[2]!.cair(1006));
+    // 3 falhas: confere /api/eu (200) e entra no modo lento
+    expect(await screen.findByText(/ao vivo indisponível/i)).toBeInTheDocument();
+  });
+
   it("sinais antigos do WebSocket não vencem o REST novo ao voltar para o ativo", async () => {
     const user = userEvent.setup();
     await conectar();

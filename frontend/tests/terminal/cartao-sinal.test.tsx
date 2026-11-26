@@ -90,8 +90,9 @@ describe("CartaoSinal", () => {
   it("tolerância de preço só aparece se o backend enviar", () => {
     const { rerender } = render(<CartaoSinal sinal={base} simbolo="BTCUSDT" />);
     expect(screen.queryByText(/Tolerância de preço/)).toBeNull();
-    rerender(<CartaoSinal sinal={{ ...base, tolerancia_preco: "12.5", preco_referencia: "43250.10" }} simbolo="BTCUSDT" />);
+    rerender(<CartaoSinal sinal={{ ...base, tolerancia_preco: 12.5, preco_referencia: "43250.10" }} simbolo="BTCUSDT" />);
     expect(screen.getByText(/Tolerância de preço/)).toBeInTheDocument();
     expect(screen.getByText(/43\.250,10/)).toBeInTheDocument();
+    expect(screen.getByText("± 12,50")).toBeInTheDocument();
   });
 });
