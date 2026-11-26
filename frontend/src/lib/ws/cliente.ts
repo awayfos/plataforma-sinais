@@ -1,4 +1,4 @@
-import type { Analise, CandleAoVivo, Sinal, TempoGrafico } from "../api/tipos";
+import type { Analise, CandleAoVivo, ErroCanal, Sinal, TempoGrafico } from "../api/tipos";
 
 export type Canal = `candles:${string}:${TempoGrafico}` | `analise:${string}` | `sinais:${string}`;
 
@@ -8,7 +8,8 @@ export type DadosDoCanal<C extends Canal> = C extends `candles:${string}`
     ? Analise
     : Sinal[];
 
-export type StatusConexao = "ocioso" | "conectando" | "conectado" | "reconectando" | "encerrado";
+/** "indisponivel": o servidor recusa o handshake mas a sessão HTTP está válida; tenta de novo devagar. */
+export type StatusConexao = "ocioso" | "conectando" | "conectado" | "reconectando" | "indisponivel" | "encerrado";
 
 export interface SocketMinimo {
   readyState: number;
@@ -39,6 +40,7 @@ export interface OpcoesTempoReal {
 }
 
 export const FALHAS_PARA_CONFERIR = 3;
+export const ATRASO_LENTO_MS = 60_000;
 
 export const ATRASO_MINIMO_MS = 500;
 export const ATRASO_MAXIMO_MS = 30_000;
@@ -51,11 +53,14 @@ export function atrasoReconexao(tentativa: number, aleatorio: () => number = Mat
 }
 
 type Ouvinte = (dados: unknown) => void;
+type OuvinteErro = (erro: ErroCanal) => void;
 
 /** Um WebSocket por aba, multiplexado por canal (contrato v1, "Tempo real"). */
 export class ClienteTempoReal {
   private socket: SocketMinimo | null = null;
   private readonly ouvintes = new Map<string, Set<Ouvinte>>();
+  private readonly ouvintesErro = new Map<string, Set<OuvinteErro>>();
+  private lento = false;
   private tentativa = 0;
   private timer: unknown = null;
   private encerrado = false;
@@ -68,7 +73,11 @@ export class ClienteTempoReal {
     return this._status;
   }
 
-  assinar<C extends Canal>(canal: C, ouvinte: (dados: DadosDoCanal<C>) => void): () => void {
+  assinar<C extends Canal>(
+    canal: C,
+    ouvinte: (dados: DadosDoCanal<C>) => void,
+    aoErro?: (erro: ErroCanal) => void,
+  ): () => void {
     let conjunto = this.ouvintes.get(canal);
     const novo = !conjunto;
     if (!conjunto) {
@@ -77,6 +86,11 @@ export class ClienteTempoReal {
     }
     const fn = ouvinte as Ouvinte;
     conjunto.add(fn);
+    if (aoErro) {
+      const erros = this.ouvintesErro.get(canal) ?? new Set<OuvinteErro>();
+      erros.add(aoErro);
+      this.ouvintesErro.set(canal, erros);
+    }
     if (!this.encerrado && !this.socket && this.timer === null) this.conectar();
     else if (novo) this.enviar({ acao: "assinar", canal });
 
@@ -84,7 +98,9 @@ export class ClienteTempoReal {
       const atual = this.ouvintes.get(canal);
       if (!atual) return;
       atual.delete(fn);
+      if (aoErro) this.ouvintesErro.get(canal)?.delete(aoErro);
       if (atual.size === 0) {
+        this.ouvintesErro.delete(canal);
         this.ouvintes.delete(canal);
         this.enviar({ acao: "cancelar", canal });
       }
@@ -101,6 +117,16 @@ export class ClienteTempoReal {
     this.mudarStatus("encerrado");
   }
 
+  /**
+   * Handshake recusado com a sessão HTTP válida (ex.: 4403 de Origem, que o navegador vê como 1006):
+   * para o laço rápido e tenta de novo a cada minuto, com status "indisponivel", até conectar.
+   */
+  desacelerar(): void {
+    if (this.encerrado || this.lento) return;
+    this.lento = true;
+    this.mudarStatus("indisponivel");
+  }
+
   /** Reabre depois de fechar() (ex.: remontagem do React em modo estrito). */
   retomar(): void {
     if (!this.encerrado) return;
@@ -115,7 +141,7 @@ export class ClienteTempoReal {
   }
 
   private conectar(): void {
-    this.mudarStatus(this.tentativa === 0 ? "conectando" : "reconectando");
+    this.mudarStatus(this.lento ? "indisponivel" : this.tentativa === 0 ? "conectando" : "reconectando");
     const criar = this.opcoes.criarSocket ?? ((url: string) => new WebSocket(url) as unknown as SocketMinimo);
     const s = criar(this.opcoes.url);
     this.socket = s;
@@ -123,6 +149,7 @@ export class ClienteTempoReal {
     s.onopen = () => {
       if (this.socket !== s) return;
       this.tentativa = 0;
+      this.lento = false;
       this.mudarStatus("conectado");
       for (const canal of this.ouvintes.keys()) this.enviar({ acao: "assinar", canal });
       if (this.jaAbriu) this.opcoes.aoReconectar?.();
@@ -137,7 +164,12 @@ export class ClienteTempoReal {
         return;
       }
       if (!msg || typeof msg !== "object" || typeof (msg as { canal?: unknown }).canal !== "string") return;
-      const { canal, dados } = msg as { canal: string; dados: unknown };
+      const { canal, dados, erro } = msg as { canal: string; dados?: unknown; erro?: ErroCanal };
+      // Quadro de erro ({canal, erro}, sem dados): nunca entregue como dados.
+      if (erro !== undefined || dados === undefined) {
+        if (erro) for (const fn of [...(this.ouvintesErro.get(canal) ?? [])]) fn(erro);
+        return;
+      }
       const conjunto = this.ouvintes.get(canal);
       if (conjunto) for (const fn of [...conjunto]) fn(dados);
     };
@@ -161,10 +193,10 @@ export class ClienteTempoReal {
   }
 
   private agendarReconexao(): void {
-    const atraso = atrasoReconexao(this.tentativa, this.opcoes.aleatorio);
+    const atraso = this.lento ? ATRASO_LENTO_MS : atrasoReconexao(this.tentativa, this.opcoes.aleatorio);
     this.tentativa += 1;
-    this.mudarStatus("reconectando");
-    if (this.tentativa % FALHAS_PARA_CONFERIR === 0) this.opcoes.aoFalhasSeguidas?.();
+    this.mudarStatus(this.lento ? "indisponivel" : "reconectando");
+    if (!this.lento && this.tentativa % FALHAS_PARA_CONFERIR === 0) this.opcoes.aoFalhasSeguidas?.();
     const agendar = this.opcoes.agendar ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
     this.timer = agendar(() => {
       this.timer = null;

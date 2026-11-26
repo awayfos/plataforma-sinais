@@ -148,7 +148,10 @@ export function EventosQualidade() {
               {q.dados.map((ev, i) => (
                 <tr key={String(ev.id ?? i)} className={tabela.linha}>
                   <td className={`${tabela.td} text-[13px] font-medium text-alerta`}>{ev.tipo}</td>
-                  <td className={`${tabela.td} num text-[13px]`}>{ev.simbolo ?? "—"}</td>
+                  <td className={`${tabela.td} num text-[13px]`}>
+                    {ev.simbolo ?? "—"}
+                    {ev.intervalo && <span className="ml-1 text-apagado">{ev.intervalo}</span>}
+                  </td>
                   <td className={`${tabela.td} num text-[13px] text-suave`}>{formatarDataHora(ev.inicio)}</td>
                   <td className={`${tabela.td} num text-[13px] text-suave`}>{ev.fim ? formatarDataHora(ev.fim) : "em aberto"}</td>
                   <td className={tabela.td}><Detalhes valor={ev.detalhes} rotulo="Ver" /></td>

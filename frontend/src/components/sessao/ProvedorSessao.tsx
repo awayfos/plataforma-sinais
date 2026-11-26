@@ -30,6 +30,12 @@ function lerLayoutLocal(id: Usuario["id"]): LayoutUsuario {
   }
 }
 
+/** Layout do servidor primeiro; a cópia local só vale se o servidor ainda não tiver nada salvo. */
+function layoutInicial(u: Usuario): LayoutUsuario {
+  if (u.layout && Object.keys(u.layout).length > 0) return u.layout;
+  return lerLayoutLocal(u.id);
+}
+
 export function irParaLogin() {
   const atual = `${window.location.pathname}${window.location.search}`;
   window.location.assign(`/login?proximo=${encodeURIComponent(atual)}`);
@@ -53,7 +59,7 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
     try {
       const u = await api.eu();
       setUsuario(u);
-      setLayout(u.layout ?? lerLayoutLocal(u.id));
+      setLayout(layoutInicial(u));
       setErro(null);
     } catch (e) {
       setErro(paraErroApi(e));
@@ -68,7 +74,7 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
       (u) => {
         if (!vivo) return;
         setUsuario(u);
-        setLayout(u.layout ?? lerLayoutLocal(u.id));
+        setLayout(layoutInicial(u));
         setCarregando(false);
       },
       (e: unknown) => {

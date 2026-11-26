@@ -12,7 +12,8 @@ export type Modo = "essencial" | "avancado";
 export type StatusAssinatura = "ativa" | "vencida" | "bloqueada";
 
 export interface Assinatura {
-  plano: string;
+  /** null quando o usuário não tem assinatura. */
+  plano: string | null;
   status: StatusAssinatura;
   vence_em: Ms | null;
 }
@@ -50,7 +51,7 @@ export interface Usuario {
   papel: Papel;
   modo: Modo;
   assinatura: Assinatura;
-  /** Fora do contrato v1: o GET /api/eu ainda não devolve o layout salvo. */
+  /** Layout salvo com PATCH /api/eu/preferencias (o backend devolve `{}` quando vazio). */
   layout?: LayoutUsuario | null;
 }
 
@@ -87,15 +88,22 @@ export type EventoEstrutura = "BOS_ALTA" | "BOS_BAIXA" | "CHOCH_ALTA" | "CHOCH_B
 
 export interface Analise {
   simbolo: string;
+  /** Abertura (não o fechamento) do último candle de 1m fechado. */
   t: Ms;
   preco: number | Decimal;
   tendencia: Record<TempoTendencia, Direcao3>;
-  forca_tendencia: number;
+  forca_tendencia: number | null;
   regioes: { resistencia: Regiao | null; suporte: Regiao | null };
   estrutura: { ultimo_evento: EventoEstrutura | null; topo: number | null; fundo: number | null };
-  volume: { relativo: number; pressao_compradora: number };
-  indicadores: { rsi: number; macd_hist: number; estoc_k: number; bb_pct: number; atr: number };
-  price_action: { impulso: number | boolean; desaceleracao: number | boolean; lateral: boolean };
+  volume: { relativo: number | null; pressao_compradora: number | null };
+  indicadores: {
+    rsi: number | null;
+    macd_hist: number | null;
+    estoc_k: number | null;
+    bb_pct: number | null;
+    atr: number | null;
+  };
+  price_action: { impulso: number | null; desaceleracao: number | null; lateral: boolean };
   resumo: string[];
 }
 
@@ -110,8 +118,8 @@ export interface Sinal {
   janela_ate: Ms | null;
   invalidacao: string | null;
   modelo: string | null;
-  /** Fora do contrato v1 (design §12.6): tolerância de preço da entrada. */
-  tolerancia_preco?: Decimal | null;
+  /** Tolerância de preço da entrada, em unidades de preço (número). */
+  tolerancia_preco?: number | null;
   /** Fora do contrato v1: preço de referência no momento da decisão. */
   preco_referencia?: Decimal | null;
 }
@@ -158,11 +166,20 @@ export interface UsuarioAdmin {
   criado_em?: Ms;
 }
 
+export interface EdicaoUsuario {
+  email?: string;
+  nome?: string;
+  status?: StatusUsuario;
+  /** Redefine a senha (≥ 10 caracteres). */
+  senha_temporaria?: string;
+}
+
 export interface NovoUsuario {
   email: string;
   nome: string;
   senha_temporaria: string;
-  plano: Id;
+  /** id numérico do plano. */
+  plano: number;
   vence_em: Ms;
 }
 
@@ -205,10 +222,17 @@ export interface EventoAuditoria {
 export interface EventoQualidade {
   id?: Id;
   simbolo?: string;
+  intervalo?: string;
   inicio?: Ms;
   fim?: Ms | null;
   tipo: string;
   detalhes?: unknown;
+}
+
+/** Quadro de erro do WebSocket: `{canal, erro}` sem `dados`. */
+export interface ErroCanal {
+  codigo: string;
+  mensagem: string;
 }
 
 export interface CorpoErro {

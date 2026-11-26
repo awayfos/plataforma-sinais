@@ -42,7 +42,7 @@ function FormNovoUsuario({ planos, aoCriar, aoCancelar }: { planos: Plano[]; aoC
         email: email.trim(),
         nome: nome.trim(),
         senha_temporaria: senha,
-        plano: planoEscolhido.id,
+        plano: Number(planoEscolhido.id),
         vence_em: dataParaMs(vence, true),
       });
       aoCriar();
@@ -92,7 +92,8 @@ function FormNovoUsuario({ planos, aoCriar, aoCancelar }: { planos: Plano[]; aoC
 }
 
 function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]; aoMudar: () => void }) {
-  const [acao, setAcao] = useState<"nenhuma" | "bloquear" | "editar" | "renovar">("nenhuma");
+  const [acao, setAcao] = useState<"nenhuma" | "bloquear" | "editar" | "renovar" | "senha">("nenhuma");
+  const [senhaNova, setSenhaNova] = useState("");
   const [nome, setNome] = useState(u.nome);
   const [email, setEmail] = useState(u.email);
   const [plano, setPlano] = useState(planos[0] ? String(planos[0].id) : "");
@@ -146,6 +147,17 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
             <>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("editar")} aria-label={`Editar ${u.nome}`}>Editar</button>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("renovar")} aria-label={`Renovar ${u.nome}`}>Renovar</button>
+              <button
+                type="button"
+                className={botao.fantasma}
+                onClick={() => {
+                  setSenhaNova("");
+                  setAcao("senha");
+                }}
+                aria-label={`Redefinir senha de ${u.nome}`}
+              >
+                Senha
+              </button>
               {status === "bloqueado" ? (
                 <button type="button" className={botao.fantasma} disabled={ocupado} onClick={() => executar(() => api.admin.editarUsuario(u.id, { status: "ativo" }))}>
                   Desbloquear
@@ -176,6 +188,31 @@ function LinhaUsuario({ u, planos, aoMudar }: { u: UsuarioAdmin; planos: Plano[]
                 }}
               >
                 Salvar
+              </button>
+              <button type="button" className={botao.fantasma} onClick={() => setAcao("nenhuma")}>Cancelar</button>
+            </>
+          )}
+          {acao === "senha" && (
+            <>
+              <input
+                aria-label="Nova senha temporária"
+                type="text"
+                autoComplete="off"
+                value={senhaNova}
+                onChange={(e) => setSenhaNova(e.target.value)}
+                className={`${campoBase} num w-44 py-1`}
+              />
+              <button
+                type="button"
+                className={botao.secundario}
+                disabled={ocupado}
+                onClick={() => {
+                  if (senhaNova.length < SENHA_MINIMA)
+                    return setErro(`A senha temporária precisa ter pelo menos ${SENHA_MINIMA} caracteres.`);
+                  void executar(() => api.admin.editarUsuario(u.id, { senha_temporaria: senhaNova }));
+                }}
+              >
+                Salvar senha
               </button>
               <button type="button" className={botao.fantasma} onClick={() => setAcao("nenhuma")}>Cancelar</button>
             </>

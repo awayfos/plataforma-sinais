@@ -18,6 +18,7 @@ const STATUS: Record<string, { texto: string; cor: string }> = {
   conectando: { texto: "Conectando…", cor: "bg-alerta animate-pulse" },
   reconectando: { texto: "Reconectando…", cor: "bg-alerta animate-pulse" },
   encerrado: { texto: "Desconectado", cor: "bg-baixa" },
+  indisponivel: { texto: "Ao vivo indisponível", cor: "bg-baixa" },
   ocioso: { texto: "Em espera", cor: "bg-apagado" },
 };
 

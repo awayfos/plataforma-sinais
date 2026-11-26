@@ -83,7 +83,7 @@ export function Perfil() {
             <dl className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-apagado">Plano</dt>
-                <dd>{usuario.assinatura.plano}</dd>
+                <dd data-testid="perfil-plano">{usuario.assinatura.plano ?? "Sem plano"}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-apagado">Situação</dt>

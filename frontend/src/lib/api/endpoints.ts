@@ -4,6 +4,7 @@ import type {
   Ativo,
   Candle,
   Desenho,
+  EdicaoUsuario,
   EventoAcesso,
   EventoAuditoria,
   EventoQualidade,
@@ -16,7 +17,6 @@ import type {
   Plano,
   Sinal,
   SinalHistorico,
-  StatusUsuario,
   TempoGrafico,
   Usuario,
   UsuarioAdmin,
@@ -57,7 +57,7 @@ export const api = {
       requisicao<UsuarioAdmin[]>(`/api/admin/usuarios${consulta(p)}`, { sinal }),
     criarUsuario: (dados: NovoUsuario) =>
       requisicao<UsuarioAdmin>("/api/admin/usuarios", { metodo: "POST", corpo: dados }),
-    editarUsuario: (id: Id, dados: Partial<{ email: string; nome: string; status: StatusUsuario }>) =>
+    editarUsuario: (id: Id, dados: EdicaoUsuario) =>
       requisicao<UsuarioAdmin>(`/api/admin/usuarios/${encodeURIComponent(String(id))}`, { metodo: "PATCH", corpo: dados }),
     planos: (sinal?: AbortSignal) => requisicao<Plano[]>("/api/admin/planos", { sinal }),
     criarPlano: (dados: Omit<Plano, "id">) => requisicao<Plano>("/api/admin/planos", { metodo: "POST", corpo: dados }),

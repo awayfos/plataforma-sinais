@@ -66,8 +66,8 @@ function LinhaRegiao({ tipo, regiao }: { tipo: "resistencia" | "suporte"; regiao
   );
 }
 
-function valorPa(v: number | boolean): { ativo: boolean; texto: string } {
-  if (typeof v === "boolean") return { ativo: v, texto: v ? "Sim" : "Não" };
+function valorPa(v: number | null): { ativo: boolean | null; texto: string } {
+  if (v === null || !Number.isFinite(v)) return { ativo: null, texto: "—" };
   return { ativo: v >= 0.5, texto: formatarNumero(v, 2) };
 }
 
@@ -107,7 +107,7 @@ export function PainelAnalise({
 
   const avancado = modo === "avancado";
   const pressao = analise.volume.pressao_compradora;
-  const pressaoFracao = pressao > 1 ? pressao / 100 : pressao;
+  const pressaoFracao = pressao === null ? null : pressao > 1 ? pressao / 100 : pressao;
   const impulso = valorPa(analise.price_action.impulso);
   const desaceleracao = valorPa(analise.price_action.desaceleracao);
 
@@ -116,7 +116,11 @@ export function PainelAnalise({
       <div className="flex items-baseline justify-between px-4 pt-3 pb-2">
         <span className="num text-lg font-semibold text-texto">{formatarPreco(analise.preco)}</span>
         <span className="text-[11px] text-apagado">
-          Último minuto fechado · <span className="num">{formatarHora(analise.t)}</span>
+          {/* t é a abertura do último candle de 1m fechado */}
+          Último minuto fechado ·{" "}
+          <span className="num" data-testid="minuto-analise">
+            {formatarHora(analise.t).slice(0, 5)}–{formatarHora(analise.t + 60_000).slice(0, 5)}
+          </span>
         </span>
       </div>
 
@@ -195,15 +199,21 @@ export function PainelAnalise({
               Volume relativo
               <Dica termo="volume_relativo" />
             </p>
-            <p className="num text-sm text-texto">{formatarNumero(analise.volume.relativo, 1)}× a média</p>
+            <p className="num text-sm text-texto" data-testid="volume-relativo">
+              {analise.volume.relativo === null ? "—" : `${formatarNumero(analise.volume.relativo, 1)}× a média`}
+            </p>
           </div>
           <div>
             <p className="flex items-center text-[11px] text-apagado">
               Pressão compradora
               <Dica termo="pressao_compradora" />
             </p>
-            <p className="num text-sm text-texto">{formatarPercentual(pressaoFracao, 0)}</p>
-            <Medidor fracao={pressaoFracao} rotulo={`Compradores ${formatarPercentual(pressaoFracao, 0)} do volume agressor`} />
+            <p className="num text-sm text-texto" data-testid="pressao-compradora">
+              {formatarPercentual(pressaoFracao, 0)}
+            </p>
+            {pressaoFracao !== null && (
+              <Medidor fracao={pressaoFracao} rotulo={`Compradores ${formatarPercentual(pressaoFracao, 0)} do volume agressor`} />
+            )}
           </div>
         </div>
       </Secao>
@@ -211,7 +221,7 @@ export function PainelAnalise({
       <Secao titulo="Price action">
         <ul className="flex flex-wrap gap-1.5 text-[11px]">
           <li className={`inline-flex items-center rounded border px-2 py-1 ${impulso.ativo ? "border-info/40 text-info" : "border-borda text-apagado"}`}>
-            Impulso{avancado ? `: ${impulso.texto}` : impulso.ativo ? " forte" : " fraco"}
+            Impulso{avancado || impulso.ativo === null ? `: ${impulso.texto}` : impulso.ativo ? " forte" : " fraco"}
             <Dica termo="impulso" />
           </li>
           <li
@@ -219,8 +229,8 @@ export function PainelAnalise({
               desaceleracao.ativo ? "border-alerta/40 text-alerta" : "border-borda text-apagado"
             }`}
           >
-            {desaceleracao.ativo ? "Desacelerando" : "Sem desaceleração"}
-            {avancado && typeof analise.price_action.desaceleracao === "number" ? ` (${desaceleracao.texto})` : ""}
+            {desaceleracao.ativo === null ? "Desaceleração: —" : desaceleracao.ativo ? "Desacelerando" : "Sem desaceleração"}
+            {avancado && desaceleracao.ativo !== null ? ` (${desaceleracao.texto})` : ""}
             <Dica termo="desaceleracao" />
           </li>
           <li

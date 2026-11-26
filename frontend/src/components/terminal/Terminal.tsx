@@ -32,7 +32,10 @@ export function Terminal() {
   const status = useStatusTempoReal();
   const reconexoes = useReconexoes();
   // Sem tempo real, o que está na tela pode estar velho: avisa e esmaece até reconectar e recarregar.
-  const desatualizado = status === "reconectando" || status === "encerrado";
+  const desatualizado = status === "reconectando" || status === "encerrado" || status === "indisponivel";
+  // Erros enviados pelo servidor num canal (ex.: ativo fora do plano, canais demais).
+  const [erroCanal, setErroCanal] = useState<{ canal: string; mensagem: string } | null>(null);
+  const registrarErro = (canal: string) => (erro: { mensagem: string }) => setErroCanal({ canal, mensagem: erro.mensagem });
 
   const ativosQ = useDados("ativos", (s) => api.ativos(s));
   const ativos = useMemo(() => ativosQ.dados ?? [], [ativosQ.dados]);
@@ -68,13 +71,16 @@ export function Terminal() {
     reconexoes,
   );
   const [aoVivo, setAoVivo] = useState<{ chave: string | null; lista: Candle[] }>({ chave: null, lista: [] });
-  useCanal(simbolo ? (`candles:${simbolo}:${tempo}` as const) : null, (c) => {
+  const canalCandles = simbolo ? (`candles:${simbolo}:${tempo}` as const) : null;
+  const canalAnalise = simbolo && aberto ? (`analise:${simbolo}` as const) : null;
+  const canalSinais = simbolo && aberto ? (`sinais:${simbolo}` as const) : null;
+  useCanal(canalCandles, (c) => {
     const candle: Candle = { t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v };
     setAoVivo((prev) => ({
       chave: chaveSerie,
       lista: mesclarCandle(prev.chave === chaveSerie ? prev.lista : [], candle).slice(-60),
     }));
-  });
+  }, registrarErro(canalCandles ?? ""));
   const candles = useMemo(() => {
     const base = candlesQ.dados ?? [];
     if (aoVivo.chave !== chaveSerie) return base;
@@ -84,16 +90,22 @@ export function Terminal() {
   // Análise e sinais: REST no início, WebSocket depois.
   const analiseQ = useDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s), reconexoes);
   const [analiseVivo, setAnaliseVivo] = useState<Analise | null>(null);
-  useCanal(simbolo && aberto ? (`analise:${simbolo}` as const) : null, setAnaliseVivo);
+  useCanal(canalAnalise, setAnaliseVivo, registrarErro(canalAnalise ?? ""));
   const analise = maisRecente(analiseQ.dados, analiseVivo?.simbolo === simbolo ? analiseVivo : null);
 
   const sinaisQ = useDados(simbolo && aberto ? `sinais:${simbolo}` : null, (s) => api.sinais(simbolo!, s), reconexoes);
   // A lista do WebSocket só vale para o ativo e a conexão em que chegou; depois de trocar de ativo ou
   // reconectar, o REST recarregado volta a mandar.
   const [sinaisVivo, setSinaisVivo] = useState<{ simbolo: string; conexao: number; lista: Sinal[] } | null>(null);
-  useCanal(simbolo && aberto ? (`sinais:${simbolo}` as const) : null, (lista) => {
-    if (simbolo) setSinaisVivo({ simbolo, conexao: reconexoes, lista });
-  });
+  useCanal(
+    canalSinais,
+    (lista) => {
+      if (simbolo) setSinaisVivo({ simbolo, conexao: reconexoes, lista });
+    },
+    registrarErro(canalSinais ?? ""),
+  );
+  const mensagemCanal =
+    erroCanal && ([canalCandles, canalAnalise, canalSinais] as (string | null)[]).includes(erroCanal.canal) ? erroCanal.mensagem : null;
   const sinais =
     sinaisVivo?.simbolo === simbolo && sinaisVivo.conexao === reconexoes ? sinaisVivo.lista : (sinaisQ.dados ?? null);
   const ativosSinal = useMemo(() => (sinais ?? []).filter((s) => s.direcao !== "AGUARDAR"), [sinais]);
@@ -214,7 +226,14 @@ export function Terminal() {
       <aside className="flex min-w-0 flex-col gap-px bg-borda lg:overflow-y-auto" aria-label="Sinais e análise">
         {desatualizado && (
           <p role="status" className="bg-alerta/10 px-4 py-2 text-[12px] font-medium text-alerta">
-            Conexão em tempo real perdida. Sinais e análise podem estar desatualizados; reconectando…
+            {status === "indisponivel"
+              ? "Conexão ao vivo indisponível. Tentando de novo a cada minuto; sinais e análise podem estar desatualizados."
+              : "Conexão em tempo real perdida. Sinais e análise podem estar desatualizados; reconectando…"}
+          </p>
+        )}
+        {mensagemCanal && (
+          <p role="alert" className="bg-baixa/10 px-4 py-2 text-[12px] font-medium text-baixa">
+            {mensagemCanal}
           </p>
         )}
         <section className="bg-painel px-4 py-3" aria-labelledby="t-sinais">

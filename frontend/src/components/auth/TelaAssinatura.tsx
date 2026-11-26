@@ -53,7 +53,7 @@ export function TelaAssinatura() {
           {assinatura && (
             <dl className="mt-6 grid grid-cols-2 gap-3 rounded-md border border-borda bg-fundo p-4 text-sm">
               <dt className="text-apagado">Plano</dt>
-              <dd className="text-right">{assinatura.plano}</dd>
+              <dd className="text-right">{assinatura.plano ?? "Sem plano"}</dd>
               <dt className="text-apagado">Situação</dt>
               <dd className="text-right font-medium text-alerta">{TEXTO_STATUS[assinatura.status]}</dd>
               <dt className="text-apagado">Vencimento</dt>

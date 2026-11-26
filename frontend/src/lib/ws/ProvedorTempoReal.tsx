@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { irParaLogin } from "@/components/sessao/ProvedorSessao";
 import { api } from "@/lib/api/endpoints";
+import type { ErroCanal } from "@/lib/api/tipos";
 import {
   ClienteTempoReal,
   urlTempoReal,
@@ -33,21 +34,22 @@ export function ProvedorTempoReal({
 }) {
   const [status, setStatus] = useState<StatusConexao>("ocioso");
   const [reconexoes, setReconexoes] = useState(0);
-  const [cliente] = useState(() =>
-    typeof window === "undefined"
-      ? null
-      : new ClienteTempoReal({
-          url: urlTempoReal(),
-          criarSocket,
-          agendar,
-          aoMudarStatus: setStatus,
-          aoReconectar: () => setReconexoes((n) => n + 1),
-          // Handshake recusado chega como 1006: confere a sessão por HTTP (401/402 redirecionam).
-          aoFalhasSeguidas: () => void api.eu().catch(() => {}),
-          aoSessaoRevogada: irParaLogin,
-          aoAssinaturaVencida: () => window.location.assign("/assinatura"),
-        }),
-  );
+  const [cliente] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const c: ClienteTempoReal = new ClienteTempoReal({
+      url: urlTempoReal(),
+      criarSocket,
+      agendar,
+      aoMudarStatus: setStatus,
+      aoReconectar: () => setReconexoes((n) => n + 1),
+      // Handshake recusado chega como 1006: confere a sessão por HTTP. 401/402 redirecionam pelos
+      // tratadores; com a sessão válida, o problema é do tempo real: tenta de novo devagar.
+      aoFalhasSeguidas: () => void api.eu().then(() => c.desacelerar(), () => {}),
+      aoSessaoRevogada: irParaLogin,
+      aoAssinaturaVencida: () => window.location.assign("/assinatura"),
+    });
+    return c;
+  });
 
   useEffect(() => {
     cliente?.retomar();
@@ -66,14 +68,24 @@ export function useReconexoes(): number {
 }
 
 /** Assina um canal enquanto o componente estiver montado (null = nenhum). */
-export function useCanal<C extends Canal>(canal: C | null, ouvinte: (dados: DadosDoCanal<C>) => void): void {
+export function useCanal<C extends Canal>(
+  canal: C | null,
+  ouvinte: (dados: DadosDoCanal<C>) => void,
+  aoErro?: (erro: ErroCanal) => void,
+): void {
   const { cliente } = useContext(Contexto);
   const ref = useRef(ouvinte);
+  const refErro = useRef(aoErro);
   useEffect(() => {
     ref.current = ouvinte;
+    refErro.current = aoErro;
   });
   useEffect(() => {
     if (!cliente || !canal) return;
-    return cliente.assinar(canal, (dados) => ref.current(dados));
+    return cliente.assinar(
+      canal,
+      (dados) => ref.current(dados),
+      (erro) => refErro.current?.(erro),
+    );
   }, [cliente, canal]);
 }
