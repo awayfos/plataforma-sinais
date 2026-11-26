@@ -16,7 +16,6 @@ const ORIGEM_REFERENCIA = "https://interno.invalid";
  */
 export function destinoSeguro(proximo: string | null | undefined): string {
   if (!proximo || !proximo.startsWith("/")) return PADRAO;
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f\\]/.test(proximo)) return PADRAO;
   let url: URL;
   try {
