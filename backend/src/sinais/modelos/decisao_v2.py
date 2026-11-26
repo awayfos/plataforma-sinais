@@ -267,8 +267,9 @@ async def _principal(  # pragma: no cover - rede e dados reais (roda no GitHub A
         f"{_mes(periodo[-1])} ({meses} meses; segundos por ativo: {linhas_1s})",
         "modelo": "HistGradientBoosting (hiperparâmetros da Fase 6, sem busca) + calibração "
         "isotônica; features fs-2 = fs-1 + 17 de microestrutura de 1 s + 3 de calendário",
-        "rótulo": "entrada num segundo sorteado entre decisão + 2 s e o prazo de compra; "
-        "vencimento alinhado ao relógio da Exnova; preço = fechamento do candle de 1 s",
+        "rótulo": "entrada num segundo sorteado entre decisão + 2 s e "
+        + ("o prazo de compra" if entrada_max_s is None else f"decisão + {entrada_max_s} s")
+        + "; vencimento alinhado ao relógio da Exnova; preço = fechamento do candle de 1 s",
         "treino da direção": "só amostras de treino não apertadas",
         "calibração": "mês de calibração dividido em duas metades purgadas (embargo de 1 h): "
         "isotônica na primeira; limiar do filtro na segunda",
