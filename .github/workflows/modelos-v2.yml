@@ -9,14 +9,6 @@ on:
       argumentos:
         description: "Argumentos de sinais.modelos.decisao_v2"
         default: "--meses 24 --fim 2026-10 --payout 0.86"
-  # TEMPORÁRIO: roda a partir do ramo da Fase 6b (workflow_dispatch só vale para a main).
-  push:
-    branches: [fase-06b-modelo-v2]
-    paths: [.github/workflows/modelos-v2.yml]
-
-env:
-  # Usado só no gatilho temporário de push: rodada real da Fase 6b.
-  ARGUMENTOS_PUSH: "--meses 24 --fim 2026-10 --payout 0.86"
 
 jobs:
   modelos-v2:
@@ -35,7 +27,7 @@ jobs:
         run: |
           mkdir -p relatorio
           /usr/bin/time -v uv run python -m sinais.modelos.decisao_v2 \
-            ${{ inputs.argumentos || env.ARGUMENTOS_PUSH }} --saida relatorio \
+            ${{ inputs.argumentos }} --saida relatorio \
             2>&1 | tee relatorio/execucao.log
       - uses: actions/upload-artifact@v4
         if: always()
