@@ -176,6 +176,8 @@ class SinalHistorico(_Saida):
 class UsuarioAdmin(Usuario):
     status: Literal["ativo", "bloqueado", "desativado"]
     criado_em: int
+    # Id da assinatura vigente (para POST /api/admin/assinaturas/{id}/encerrar); None sem ela.
+    assinatura_id: int | None = None
 
 
 class NovoUsuarioEntrada(_Entrada):
