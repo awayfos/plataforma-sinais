@@ -43,3 +43,6 @@ class RepositorioCandlesMemoria:
 
     async def eventos_qualidade(self, simbolo: str) -> list[EventoQualidade]:
         return [e for e in self._qualidade if e[0] == simbolo]
+
+    def todos_eventos_qualidade(self) -> list[EventoQualidade]:
+        return list(self._qualidade)

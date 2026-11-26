@@ -65,6 +65,17 @@ class Expiracao(IntEnum):
     H1 = 3600
 
 
+# Rótulos usados na API, no registro de modelos e nos planos (um só lugar).
+ROTULOS_EXPIRACAO: dict[Expiracao, str] = {
+    Expiracao.M1: "1m",
+    Expiracao.M5: "5m",
+    Expiracao.M15: "15m",
+    Expiracao.M30: "30m",
+    Expiracao.H1: "60m",
+}
+EXPIRACAO_POR_ROTULO: dict[str, Expiracao] = {r: e for e, r in ROTULOS_EXPIRACAO.items()}
+
+
 class Direcao(StrEnum):
     COMPRA = "BUY"
     VENDA = "SELL"

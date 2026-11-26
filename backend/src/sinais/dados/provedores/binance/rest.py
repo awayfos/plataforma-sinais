@@ -10,9 +10,11 @@ import httpx
 
 from sinais.core.tempo import InstanteMs
 from sinais.dados.modelos import Candle, IntervaloColeta
+from sinais.dados.negocios import de_agg_trade_rest
 from sinais.dados.provedores.backoff import atraso_backoff
 from sinais.dados.provedores.binance.parsing import ErroParsing, de_linha_rest
 from sinais.dados.provedores.erros import ErroLimiteTaxa
+from sinais.dados.vela_formacao import Negocio
 from sinais.logs import obter_logger
 
 _log = obter_logger(__name__)
@@ -98,3 +100,25 @@ class ClienteRestBinance:
         if not isinstance(dados, list):
             raise ErroParsing(f"{simbolo} {intervalo.value}: resposta de klines não é lista")
         return [de_linha_rest(simbolo, intervalo, linha) for linha in dados]
+
+    async def agg_trades(
+        self, simbolo: str, inicio: InstanteMs, fim: InstanteMs, limite: int = 1000
+    ) -> list[Negocio]:
+        """aggTrades com horário em ``[inicio, fim)`` (janela de até 1 h), em ordem de id.
+        Páginas seguintes por ``fromId``, até passar de ``fim``."""
+        params = {
+            "symbol": simbolo,
+            "startTime": str(inicio),
+            "endTime": str(fim - 1),
+            "limit": str(limite),
+        }
+        saida: list[Negocio] = []
+        while True:
+            dados = await self._get("/api/v3/aggTrades", params)
+            if not isinstance(dados, list):
+                raise ErroParsing(f"{simbolo}: resposta de aggTrades não é lista")
+            pagina = [de_agg_trade_rest(item) for item in dados]
+            saida.extend(n for n in pagina if inicio <= n.t < fim)
+            if len(pagina) < limite or pagina[-1].t >= fim:
+                return saida
+            params = {"symbol": simbolo, "fromId": str(pagina[-1].id + 1), "limit": str(limite)}

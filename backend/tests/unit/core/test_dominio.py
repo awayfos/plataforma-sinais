@@ -77,3 +77,11 @@ def test_ativos_v1() -> None:
     assert tuple(a.simbolo for a in ATIVOS_V1) == ("BTCUSDT", "ETHUSDT")
     assert all(a.classe is ClasseAtivo.CRIPTO for a in ATIVOS_V1)
     assert all(a.provedor == "binance" for a in ATIVOS_V1)
+
+
+def test_rotulos_de_expiracao_compartilhados() -> None:
+    from sinais.core.dominio import EXPIRACAO_POR_ROTULO, ROTULOS_EXPIRACAO, Expiracao
+
+    assert list(ROTULOS_EXPIRACAO.values()) == ["1m", "5m", "15m", "30m", "60m"]
+    assert ROTULOS_EXPIRACAO[Expiracao.H1] == "60m"
+    assert EXPIRACAO_POR_ROTULO["15m"] is Expiracao.M15 and int(EXPIRACAO_POR_ROTULO["1m"]) == 60

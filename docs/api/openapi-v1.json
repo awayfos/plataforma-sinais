@@ -1,0 +1,3640 @@
+{
+  "components": {
+    "schemas": {
+      "Acesso": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "evento": {
+            "title": "Evento",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip": {
+            "title": "Ip",
+            "type": "string"
+          },
+          "t": {
+            "title": "T",
+            "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "integer"
+          },
+          "user_agent": {
+            "title": "User Agent",
+            "type": "string"
+          },
+          "usuario_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usuario Id"
+          }
+        },
+        "required": [
+          "id",
+          "usuario_id",
+          "email",
+          "evento",
+          "ip",
+          "user_agent",
+          "t",
+          "ts"
+        ],
+        "title": "Acesso",
+        "type": "object"
+      },
+      "Analise": {
+        "properties": {
+          "estrutura": {
+            "$ref": "#/components/schemas/Estrutura"
+          },
+          "forca_tendencia": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forca Tendencia"
+          },
+          "indicadores": {
+            "$ref": "#/components/schemas/Indicadores"
+          },
+          "preco": {
+            "title": "Preco",
+            "type": "string"
+          },
+          "price_action": {
+            "$ref": "#/components/schemas/PriceAction"
+          },
+          "regioes": {
+            "$ref": "#/components/schemas/Regioes"
+          },
+          "resumo": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resumo",
+            "type": "array"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          },
+          "t": {
+            "title": "T",
+            "type": "integer"
+          },
+          "tendencia": {
+            "additionalProperties": {
+              "enum": [
+                -1,
+                0,
+                1
+              ],
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/TempoTendencia"
+            },
+            "title": "Tendencia",
+            "type": "object"
+          },
+          "volume": {
+            "$ref": "#/components/schemas/VolumeAnalise"
+          }
+        },
+        "required": [
+          "simbolo",
+          "t",
+          "preco",
+          "tendencia",
+          "forca_tendencia",
+          "regioes",
+          "estrutura",
+          "volume",
+          "indicadores",
+          "price_action",
+          "resumo"
+        ],
+        "title": "Analise",
+        "type": "object"
+      },
+      "Assinatura": {
+        "properties": {
+          "fim": {
+            "title": "Fim",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "inicio": {
+            "title": "Inicio",
+            "type": "integer"
+          },
+          "origem": {
+            "title": "Origem",
+            "type": "string"
+          },
+          "plano_id": {
+            "title": "Plano Id",
+            "type": "integer"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "usuario_id",
+          "plano_id",
+          "inicio",
+          "fim",
+          "origem"
+        ],
+        "title": "Assinatura",
+        "type": "object"
+      },
+      "AssinaturaEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "fim": {
+            "minimum": 0.0,
+            "title": "Fim",
+            "type": "integer"
+          },
+          "inicio": {
+            "minimum": 0.0,
+            "title": "Inicio",
+            "type": "integer"
+          },
+          "plano_id": {
+            "title": "Plano Id",
+            "type": "integer"
+          },
+          "usuario_id": {
+            "title": "Usuario Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "usuario_id",
+          "plano_id",
+          "inicio",
+          "fim"
+        ],
+        "title": "AssinaturaEntrada",
+        "type": "object"
+      },
+      "AssinaturaUsuario": {
+        "properties": {
+          "plano": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plano"
+          },
+          "status": {
+            "enum": [
+              "ativa",
+              "vencida",
+              "bloqueada"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "vence_em": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vence Em"
+          }
+        },
+        "required": [
+          "plano",
+          "status",
+          "vence_em"
+        ],
+        "title": "AssinaturaUsuario",
+        "type": "object"
+      },
+      "Ativo": {
+        "properties": {
+          "aberto": {
+            "title": "Aberto",
+            "type": "boolean"
+          },
+          "classe": {
+            "title": "Classe",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "simbolo",
+          "nome",
+          "classe",
+          "aberto"
+        ],
+        "title": "Ativo",
+        "type": "object"
+      },
+      "CandleSaida": {
+        "properties": {
+          "c": {
+            "title": "C",
+            "type": "string"
+          },
+          "h": {
+            "title": "H",
+            "type": "string"
+          },
+          "l": {
+            "title": "L",
+            "type": "string"
+          },
+          "o": {
+            "title": "O",
+            "type": "string"
+          },
+          "t": {
+            "title": "T",
+            "type": "integer"
+          },
+          "v": {
+            "title": "V",
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "o",
+          "h",
+          "l",
+          "c",
+          "v"
+        ],
+        "title": "CandleSaida",
+        "type": "object"
+      },
+      "CorpoErro": {
+        "properties": {
+          "codigo": {
+            "title": "Codigo",
+            "type": "string"
+          },
+          "mensagem": {
+            "title": "Mensagem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo",
+          "mensagem"
+        ],
+        "title": "CorpoErro",
+        "type": "object"
+      },
+      "EdicaoUsuarioEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "nome": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          },
+          "senha_temporaria": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Senha Temporaria"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ativo",
+                  "bloqueado",
+                  "desativado"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "EdicaoUsuarioEntrada",
+        "type": "object"
+      },
+      "EstatisticaPublica": {
+        "properties": {
+          "expiracao": {
+            "$ref": "#/components/schemas/ExpiracaoRotulo"
+          },
+          "fim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fim"
+          },
+          "inicio": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inicio"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          },
+          "taxa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taxa"
+          }
+        },
+        "required": [
+          "simbolo",
+          "expiracao",
+          "n",
+          "taxa",
+          "inicio",
+          "fim"
+        ],
+        "title": "EstatisticaPublica",
+        "type": "object"
+      },
+      "Estrutura": {
+        "properties": {
+          "fundo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fundo"
+          },
+          "topo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topo"
+          },
+          "ultimo_evento": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventoEstrutura"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ultimo_evento",
+          "topo",
+          "fundo"
+        ],
+        "title": "Estrutura",
+        "type": "object"
+      },
+      "EventoEstrutura": {
+        "enum": [
+          "BOS_ALTA",
+          "BOS_BAIXA",
+          "CHOCH_ALTA",
+          "CHOCH_BAIXA"
+        ],
+        "type": "string"
+      },
+      "EventoQualidade": {
+        "properties": {
+          "detalhes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalhes"
+          },
+          "fim": {
+            "title": "Fim",
+            "type": "integer"
+          },
+          "inicio": {
+            "title": "Inicio",
+            "type": "integer"
+          },
+          "intervalo": {
+            "title": "Intervalo",
+            "type": "string"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          },
+          "tipo": {
+            "title": "Tipo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "simbolo",
+          "intervalo",
+          "inicio",
+          "fim",
+          "tipo"
+        ],
+        "title": "EventoQualidade",
+        "type": "object"
+      },
+      "ExpiracaoRotulo": {
+        "enum": [
+          "1m",
+          "5m",
+          "15m",
+          "30m",
+          "60m"
+        ],
+        "type": "string"
+      },
+      "Indicadores": {
+        "properties": {
+          "atr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atr"
+          },
+          "bb_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bb Pct"
+          },
+          "estoc_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estoc K"
+          },
+          "macd_hist": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Macd Hist"
+          },
+          "rsi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsi"
+          }
+        },
+        "required": [
+          "rsi",
+          "macd_hist",
+          "estoc_k",
+          "bb_pct",
+          "atr"
+        ],
+        "title": "Indicadores",
+        "type": "object"
+      },
+      "LoginEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "senha": {
+            "maxLength": 256,
+            "title": "Senha",
+            "type": "string"
+          },
+          "totp": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totp"
+          }
+        },
+        "required": [
+          "email",
+          "senha"
+        ],
+        "title": "LoginEntrada",
+        "type": "object"
+      },
+      "NovoUsuarioEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "nome": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Nome",
+            "type": "string"
+          },
+          "plano": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Plano"
+          },
+          "senha_temporaria": {
+            "maxLength": 256,
+            "minLength": 10,
+            "title": "Senha Temporaria",
+            "type": "string"
+          },
+          "vence_em": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vence Em"
+          }
+        },
+        "required": [
+          "email",
+          "nome",
+          "senha_temporaria",
+          "plano"
+        ],
+        "title": "NovoUsuarioEntrada",
+        "type": "object"
+      },
+      "Payout": {
+        "additionalProperties": false,
+        "properties": {
+          "expiracao": {
+            "$ref": "#/components/schemas/ExpiracaoRotulo"
+          },
+          "payout": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Payout",
+            "type": "number"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "simbolo",
+          "expiracao",
+          "payout"
+        ],
+        "title": "Payout",
+        "type": "object"
+      },
+      "Plano": {
+        "properties": {
+          "ativo": {
+            "title": "Ativo",
+            "type": "boolean"
+          },
+          "duracao_dias": {
+            "title": "Duracao Dias",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "preco_centavos": {
+            "title": "Preco Centavos",
+            "type": "integer"
+          },
+          "recursos": {
+            "$ref": "#/components/schemas/RecursosPlano"
+          }
+        },
+        "required": [
+          "id",
+          "nome",
+          "duracao_dias",
+          "preco_centavos",
+          "recursos",
+          "ativo"
+        ],
+        "title": "Plano",
+        "type": "object"
+      },
+      "PlanoEdicao": {
+        "additionalProperties": false,
+        "properties": {
+          "ativo": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ativo"
+          },
+          "duracao_dias": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 3660.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duracao Dias"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "nome": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome"
+          },
+          "preco_centavos": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preco Centavos"
+          },
+          "recursos": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecursosPlano"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PlanoEdicao",
+        "type": "object"
+      },
+      "PlanoEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "ativo": {
+            "default": true,
+            "title": "Ativo",
+            "type": "boolean"
+          },
+          "duracao_dias": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 3660.0,
+            "title": "Duracao Dias",
+            "type": "integer"
+          },
+          "nome": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Nome",
+            "type": "string"
+          },
+          "preco_centavos": {
+            "minimum": 0.0,
+            "title": "Preco Centavos",
+            "type": "integer"
+          },
+          "recursos": {
+            "$ref": "#/components/schemas/RecursosPlano"
+          }
+        },
+        "required": [
+          "nome",
+          "duracao_dias",
+          "preco_centavos",
+          "recursos"
+        ],
+        "title": "PlanoEntrada",
+        "type": "object"
+      },
+      "PreferenciasEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "layout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layout"
+          },
+          "modo": {
+            "anyOf": [
+              {
+                "enum": [
+                  "essencial",
+                  "avancado"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modo"
+          }
+        },
+        "title": "PreferenciasEntrada",
+        "type": "object"
+      },
+      "PriceAction": {
+        "properties": {
+          "desaceleracao": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desaceleracao"
+          },
+          "impulso": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impulso"
+          },
+          "lateral": {
+            "title": "Lateral",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "impulso",
+          "desaceleracao",
+          "lateral"
+        ],
+        "title": "PriceAction",
+        "type": "object"
+      },
+      "RecursosPlano": {
+        "additionalProperties": false,
+        "properties": {
+          "ativos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ativos",
+            "type": "array"
+          },
+          "cursos": {
+            "title": "Cursos",
+            "type": "boolean"
+          },
+          "expiracoes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpiracaoRotulo"
+            },
+            "title": "Expiracoes",
+            "type": "array"
+          },
+          "modo_avancado": {
+            "title": "Modo Avancado",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ativos",
+          "expiracoes",
+          "modo_avancado",
+          "cursos"
+        ],
+        "title": "RecursosPlano",
+        "type": "object"
+      },
+      "Regiao": {
+        "properties": {
+          "distancia_atr": {
+            "title": "Distancia Atr",
+            "type": "number"
+          },
+          "preco": {
+            "title": "Preco",
+            "type": "number"
+          },
+          "toques": {
+            "title": "Toques",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "preco",
+          "distancia_atr",
+          "toques"
+        ],
+        "title": "Regiao",
+        "type": "object"
+      },
+      "Regioes": {
+        "properties": {
+          "resistencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Regiao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suporte": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Regiao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "resistencia",
+          "suporte"
+        ],
+        "title": "Regioes",
+        "type": "object"
+      },
+      "RegistroAuditoria": {
+        "properties": {
+          "acao": {
+            "title": "Acao",
+            "type": "string"
+          },
+          "admin_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Email"
+          },
+          "admin_id": {
+            "title": "Admin Id",
+            "type": "integer"
+          },
+          "alvo": {
+            "title": "Alvo",
+            "type": "string"
+          },
+          "antes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Antes"
+          },
+          "depois": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depois"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "t": {
+            "title": "T",
+            "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "admin_id",
+          "admin_email",
+          "acao",
+          "alvo",
+          "antes",
+          "depois",
+          "t",
+          "ts"
+        ],
+        "title": "RegistroAuditoria",
+        "type": "object"
+      },
+      "RespostaErro": {
+        "properties": {
+          "erro": {
+            "$ref": "#/components/schemas/CorpoErro"
+          }
+        },
+        "required": [
+          "erro"
+        ],
+        "title": "RespostaErro",
+        "type": "object"
+      },
+      "RespostaLogin": {
+        "properties": {
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          }
+        },
+        "required": [
+          "usuario"
+        ],
+        "title": "RespostaLogin",
+        "type": "object"
+      },
+      "SenhaEntrada": {
+        "additionalProperties": false,
+        "properties": {
+          "senha_atual": {
+            "maxLength": 256,
+            "title": "Senha Atual",
+            "type": "string"
+          },
+          "senha_nova": {
+            "maxLength": 256,
+            "minLength": 10,
+            "title": "Senha Nova",
+            "type": "string"
+          }
+        },
+        "required": [
+          "senha_atual",
+          "senha_nova"
+        ],
+        "title": "SenhaEntrada",
+        "type": "object"
+      },
+      "Sinal": {
+        "properties": {
+          "direcao": {
+            "enum": [
+              "COMPRA",
+              "VENDA",
+              "AGUARDAR"
+            ],
+            "title": "Direcao",
+            "type": "string"
+          },
+          "expiracao": {
+            "$ref": "#/components/schemas/ExpiracaoRotulo"
+          },
+          "invalidacao": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidacao"
+          },
+          "janela_ate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Janela Ate"
+          },
+          "modelo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelo"
+          },
+          "motivo": {
+            "title": "Motivo",
+            "type": "string"
+          },
+          "n_validacao": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Validacao"
+          },
+          "preco_referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preco Referencia"
+          },
+          "probabilidade": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probabilidade"
+          },
+          "tolerancia_preco": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerancia Preco"
+          }
+        },
+        "required": [
+          "expiracao",
+          "direcao",
+          "probabilidade",
+          "n_validacao",
+          "motivo",
+          "janela_ate",
+          "invalidacao",
+          "modelo"
+        ],
+        "title": "Sinal",
+        "type": "object"
+      },
+      "SinalHistorico": {
+        "properties": {
+          "apertado": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apertado"
+          },
+          "direcao": {
+            "enum": [
+              "COMPRA",
+              "VENDA",
+              "AGUARDAR"
+            ],
+            "title": "Direcao",
+            "type": "string"
+          },
+          "expiracao": {
+            "$ref": "#/components/schemas/ExpiracaoRotulo"
+          },
+          "gerado_em": {
+            "title": "Gerado Em",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "preco_referencia": {
+            "title": "Preco Referencia",
+            "type": "string"
+          },
+          "resultado": {
+            "anyOf": [
+              {
+                "enum": [
+                  "WIN",
+                  "LOSS",
+                  "TIE",
+                  "SEM_DADO"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado"
+          },
+          "simbolo": {
+            "title": "Simbolo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "simbolo",
+          "expiracao",
+          "direcao",
+          "gerado_em",
+          "preco_referencia",
+          "resultado",
+          "apertado"
+        ],
+        "title": "SinalHistorico",
+        "type": "object"
+      },
+      "TempoTendencia": {
+        "enum": [
+          "1m",
+          "5m",
+          "15m",
+          "1h"
+        ],
+        "type": "string"
+      },
+      "Usuario": {
+        "properties": {
+          "assinatura": {
+            "$ref": "#/components/schemas/AssinaturaUsuario"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "layout": {
+            "additionalProperties": true,
+            "title": "Layout",
+            "type": "object"
+          },
+          "modo": {
+            "enum": [
+              "essencial",
+              "avancado"
+            ],
+            "title": "Modo",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "papel": {
+            "enum": [
+              "cliente",
+              "admin"
+            ],
+            "title": "Papel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "nome",
+          "papel",
+          "modo",
+          "assinatura"
+        ],
+        "title": "Usuario",
+        "type": "object"
+      },
+      "UsuarioAdmin": {
+        "properties": {
+          "assinatura": {
+            "$ref": "#/components/schemas/AssinaturaUsuario"
+          },
+          "criado_em": {
+            "title": "Criado Em",
+            "type": "integer"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "layout": {
+            "additionalProperties": true,
+            "title": "Layout",
+            "type": "object"
+          },
+          "modo": {
+            "enum": [
+              "essencial",
+              "avancado"
+            ],
+            "title": "Modo",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "papel": {
+            "enum": [
+              "cliente",
+              "admin"
+            ],
+            "title": "Papel",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ativo",
+              "bloqueado",
+              "desativado"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "nome",
+          "papel",
+          "modo",
+          "assinatura",
+          "status",
+          "criado_em"
+        ],
+        "title": "UsuarioAdmin",
+        "type": "object"
+      },
+      "VolumeAnalise": {
+        "properties": {
+          "pressao_compradora": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressao Compradora"
+          },
+          "relativo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relativo"
+          }
+        },
+        "required": [
+          "relativo",
+          "pressao_compradora"
+        ],
+        "title": "VolumeAnalise",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Plataforma Sinais — API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/admin/acessos": {
+      "get": {
+        "operationId": "acessos_api_admin_acessos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "usuario_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Usuario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Acesso"
+                  },
+                  "title": "Response Acessos Api Admin Acessos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Acessos",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/assinaturas": {
+      "post": {
+        "operationId": "criar_assinatura_api_admin_assinaturas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssinaturaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assinatura"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Criar Assinatura",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/assinaturas/{assinatura_id}/encerrar": {
+      "post": {
+        "description": "Antecipa o fim da assinatura para agora (auditado). O usuário perde o acesso na hora.",
+        "operationId": "encerrar_assinatura_api_admin_assinaturas__assinatura_id__encerrar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assinatura_id",
+            "required": true,
+            "schema": {
+              "title": "Assinatura Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assinatura"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Encerrar Assinatura",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/auditoria": {
+      "get": {
+        "operationId": "auditoria_api_admin_auditoria_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistroAuditoria"
+                  },
+                  "title": "Response Auditoria Api Admin Auditoria Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Auditoria",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/corretoras/exnova/payout": {
+      "get": {
+        "operationId": "payout_api_admin_corretoras_exnova_payout_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Payout"
+                  },
+                  "title": "Response Payout Api Admin Corretoras Exnova Payout Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Payout",
+        "tags": [
+          "administração"
+        ]
+      },
+      "put": {
+        "operationId": "substituir_payout_api_admin_corretoras_exnova_payout_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/Payout"
+                },
+                "title": "Corpo",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Payout"
+                  },
+                  "title": "Response Substituir Payout Api Admin Corretoras Exnova Payout Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Substituir Payout",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/planos": {
+      "get": {
+        "operationId": "listar_planos_api_admin_planos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Plano"
+                  },
+                  "title": "Response Listar Planos Api Admin Planos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Listar Planos",
+        "tags": [
+          "administração"
+        ]
+      },
+      "patch": {
+        "description": "Mesma edição de ``PATCH /planos/{id}``, com o ``id`` no corpo (plano inteiro).",
+        "operationId": "editar_plano_pelo_corpo_api_admin_planos_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanoEdicao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plano"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Editar Plano Pelo Corpo",
+        "tags": [
+          "administração"
+        ]
+      },
+      "post": {
+        "operationId": "criar_plano_api_admin_planos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plano"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Criar Plano",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/planos/{plano_id}": {
+      "patch": {
+        "operationId": "editar_plano_api_admin_planos__plano_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plano_id",
+            "required": true,
+            "schema": {
+              "title": "Plano Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanoEdicao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plano"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Editar Plano",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/qualidade": {
+      "get": {
+        "operationId": "qualidade_api_admin_qualidade_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventoQualidade"
+                  },
+                  "title": "Response Qualidade Api Admin Qualidade Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Qualidade",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/usuarios": {
+      "get": {
+        "operationId": "listar_usuarios_api_admin_usuarios_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "busca",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Busca"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ativo",
+                    "bloqueado",
+                    "desativado"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioAdmin"
+                  },
+                  "title": "Response Listar Usuarios Api Admin Usuarios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Listar Usuarios",
+        "tags": [
+          "administração"
+        ]
+      },
+      "post": {
+        "operationId": "criar_usuario_api_admin_usuarios_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NovoUsuarioEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Criar Usuario",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/admin/usuarios/{usuario_id}": {
+      "patch": {
+        "operationId": "editar_usuario_api_admin_usuarios__usuario_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "usuario_id",
+            "required": true,
+            "schema": {
+              "title": "Usuario Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EdicaoUsuarioEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Editar Usuario",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
+    "/api/analise": {
+      "get": {
+        "operationId": "analise_api_analise_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "simbolo",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Simbolo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Analise"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Analise",
+        "tags": [
+          "mercado"
+        ]
+      }
+    },
+    "/api/ativos": {
+      "get": {
+        "operationId": "ativos_api_ativos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Ativo"
+                  },
+                  "title": "Response Ativos Api Ativos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Ativos",
+        "tags": [
+          "mercado"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaLogin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "autenticação"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "autenticação"
+        ]
+      }
+    },
+    "/api/candles": {
+      "get": {
+        "operationId": "candles_api_candles_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "simbolo",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Simbolo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tg",
+            "required": false,
+            "schema": {
+              "default": "1m",
+              "enum": [
+                "1m",
+                "3m",
+                "5m",
+                "15m",
+                "30m",
+                "1h",
+                "4h",
+                "1d",
+                "1w"
+              ],
+              "title": "Tg",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limite",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 1500,
+              "minimum": 1,
+              "title": "Limite",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CandleSaida"
+                  },
+                  "title": "Response Candles Api Candles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Candles",
+        "tags": [
+          "mercado"
+        ]
+      }
+    },
+    "/api/eu": {
+      "get": {
+        "operationId": "eu_api_eu_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Eu",
+        "tags": [
+          "conta"
+        ]
+      }
+    },
+    "/api/eu/preferencias": {
+      "patch": {
+        "operationId": "preferencias_api_eu_preferencias_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenciasEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Preferencias",
+        "tags": [
+          "conta"
+        ]
+      }
+    },
+    "/api/eu/senha": {
+      "post": {
+        "operationId": "trocar_senha_api_eu_senha_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SenhaEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Trocar Senha",
+        "tags": [
+          "conta"
+        ]
+      }
+    },
+    "/api/publico/estatisticas": {
+      "get": {
+        "description": "Por ativo e expiração (n, taxa, período). Vazio até existirem sinais liquidados.",
+        "operationId": "estatisticas_api_publico_estatisticas_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EstatisticaPublica"
+                  },
+                  "title": "Response Estatisticas Api Publico Estatisticas Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Estatisticas",
+        "tags": [
+          "público"
+        ]
+      }
+    },
+    "/api/sinais": {
+      "get": {
+        "operationId": "sinais_api_sinais_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "simbolo",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Simbolo",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Sinal"
+                  },
+                  "title": "Response Sinais Api Sinais Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Sinais",
+        "tags": [
+          "mercado"
+        ]
+      }
+    },
+    "/api/sinais/historico": {
+      "get": {
+        "description": "Sinais emitidos e liquidados. Vazio até o motor de sinais ao vivo gravar o primeiro.",
+        "operationId": "historico_api_sinais_historico_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "simbolo",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Simbolo",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inicio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inicio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fim",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fim"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SinalHistorico"
+                  },
+                  "title": "Response Historico Api Sinais Historico Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Historico",
+        "tags": [
+          "mercado"
+        ]
+      }
+    }
+  }
+}

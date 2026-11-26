@@ -117,3 +117,24 @@ def test_linha_malformada_falha_pagina_inteira() -> None:
     c, _ = cliente(lambda r: httpx.Response(200, content=json.dumps([linha(0), ruim])))
     with pytest.raises(ErroParsing):
         asyncio.run(c.klines("BTCUSDT", IntervaloColeta.M1, T0, T0 + 2 * M))
+
+
+def test_agg_trades_pagina_por_id_ate_o_fim() -> None:
+    pedidos: list[dict[str, str]] = []
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        q = dict(r.url.params)
+        pedidos.append(q)
+        assert r.url.path == "/api/v3/aggTrades"
+        inicio_id = int(q.get("fromId", "1"))
+        itens = [
+            {"a": i, "p": "100", "q": "1", "f": i, "l": i, "T": T0 + i, "m": False, "M": True}
+            for i in range(inicio_id, min(inicio_id + int(q["limit"]), 6))
+        ]
+        return httpx.Response(200, json=itens)
+
+    c, _ = cliente(handler)
+    negocios = asyncio.run(c.agg_trades("BTCUSDT", T0, T0 + 4, limite=2))
+    assert [n.id for n in negocios] == [1, 2, 3]  # o 4 já está fora de [inicio, fim)
+    assert pedidos[0]["startTime"] == str(T0) and pedidos[0]["endTime"] == str(T0 + 3)
+    assert pedidos[1] == {"symbol": "BTCUSDT", "fromId": "3", "limit": "2"}

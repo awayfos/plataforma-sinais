@@ -53,3 +53,11 @@ class Candle:
     @property
     def fechamento_ms(self) -> InstanteMs:
         return self.abertura + self.intervalo_ms
+
+
+def decimal_texto(d: Decimal) -> str:
+    """Decimal sem zeros à direita e sem notação científica (``50000.100000`` → ``50000.1``)."""
+    texto = format(d, "f")
+    if "." in texto:
+        texto = texto.rstrip("0").rstrip(".")
+    return texto or "0"

@@ -19,7 +19,19 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
-      - run: uv run pytest --cov=sinais.core --cov=sinais.logs --cov=sinais.dados --cov-fail-under=90
+      - name: Versões resolvidas da API e das contas
+        run: uv pip list | grep -iE "fastapi|starlette|uvicorn|argon2|pyotp|cryptography" || true
+      - name: Gera o OpenAPI a partir do código
+        run: |
+          uv run python -m sinais.api.openapi > ../docs/api/openapi-v1.gerado.json
+          echo "=== OPENAPI INICIO ==="; base64 -w 0 ../docs/api/openapi-v1.gerado.json; echo; echo "=== OPENAPI FIM ==="
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-v1
+          path: docs/api/openapi-v1.gerado.json
+      - run: uv run pytest --cov=sinais.core --cov=sinais.logs --cov=sinais.dados --cov=sinais.contas --cov-fail-under=90
+      - name: Snapshot do OpenAPI (docs/api/openapi-v1.json) igual ao código
+        run: diff -u ../docs/api/openapi-v1.json ../docs/api/openapi-v1.gerado.json
 
   integracao:
     runs-on: ubuntu-latest
@@ -55,6 +67,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose -f infra/docker-compose.yml --env-file .env.example config -q
+
+  ticks:
+    # Prova "100% igual à Binance": grava aggTrades reais por >= 3 minutos e compara cada
+    # minuto (e o 5m) montado tick a tick com os klines oficiais, com igualdade exata.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run python -m sinais.processos.prova_ticks --saida relatorio-ticks.md
 
   fumaca:
     # Sobe o ambiente completo e coleta dados reais da Binance (endpoint só de dados de mercado).
