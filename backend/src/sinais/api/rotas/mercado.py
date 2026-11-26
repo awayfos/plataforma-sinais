@@ -13,7 +13,7 @@ from sinais.api.erros import RESPOSTAS_ERRO
 from sinais.api.servicos import NOMES_ATIVOS, Servicos
 from sinais.api.sinais_ao_vivo import EXPIRACOES, sinais_para
 from sinais.api.visoes import candle_saida
-from sinais.contas.autorizacao import expiracoes_permitidas, pode_ver_ativo
+from sinais.contas.autorizacao import ativos_permitidos, expiracoes_permitidas, pode_ver_ativo
 from sinais.contas.contexto import Contexto
 from sinais.contas.servico import ErroConta
 from sinais.core.calendario import calendario_para
@@ -84,12 +84,17 @@ async def sinais(ctx: Assinante, s: Svc, simbolo: Simbolo) -> list[e.Sinal]:
 async def historico(
     ctx: Assinante,
     s: Svc,
-    simbolo: Simbolo,
+    simbolo: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
     inicio: Annotated[int | None, Query(ge=0)] = None,
     fim: Annotated[int | None, Query(ge=0)] = None,
 ) -> list[e.SinalHistorico]:
-    """Sinais emitidos e liquidados. Vazio até o motor de sinais ao vivo gravar o primeiro."""
-    exigir_ativo(ctx, s, simbolo)
+    """Sinais emitidos e liquidados. Sem ``simbolo``: todos os ativos do plano do usuário.
+    Vazio até o motor de sinais ao vivo gravar o primeiro."""
+    if simbolo is not None:
+        simbolos: tuple[str, ...] = (exigir_ativo(ctx, s, simbolo),)
+    else:
+        simbolos = ativos_permitidos(ctx, s.simbolos)
     if inicio is not None and fim is not None and fim < inicio:
         raise ErroConta(422, "periodo_invalido", "O fim deve ser posterior ao início.")
+    del simbolos  # sem motor de sinais ao vivo ainda: nada a consultar
     return []
