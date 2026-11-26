@@ -1,6 +1,6 @@
 # Motor de Situações — design
 
-**Data:** 2026-11-26 · **Status:** aguardando aprovação do cliente
+**Data:** 2026-11-26 · **Status:** aprovado pelo cliente ("continue", 2026-11-26)
 **Complementa:** `2026-11-25-plataforma-sinais-design.md` (§12–§13 continuam valendo)
 **Depende de:** PR #15 (Fase 6b: rótulos 1 s, microestrutura `fs-2`, avaliação v2) mergeado na `main`.
 
@@ -141,6 +141,22 @@ Situação com menos de 300 ocorrências esperadas no período fica fora da aval
    pré-registro **antes** da contagem de ocorrências. Depois da contagem nada é afrouxado: situação abaixo de
    300 sai da avaliação confirmatória.
 8. **Dependência.** O trabalho começa após o merge do PR #15 (o ramo é rebaseado sobre a `main`).
+
+## 9c. Acréscimos do cliente (2026-11-26)
+
+1. **Cada toque enfraquece a resistência/suporte.** A ordem do toque (1º, 2º, 3º, 4º+) e o tempo entre
+   toques entram como variáveis na camada B e como recorte em S6: variação S6a = 2º–3º toque (região ainda
+   forte, venda na rejeição); S3 ganha a variação S3b = rompimento após ≥ 4 toques (região gasta, a favor do
+   rompimento). Estatística por ordem do toque aparece no painel.
+2. **O que o usuário vê.**
+   - **No gráfico**: marcação de COMPRA/VENDA no candle e no preço exato da entrada, linha do vencimento e,
+     ao vencer, o resultado (WIN/LOSS/EMPATE) desenhado no gráfico.
+   - **Área de sinais**: cada sinal mostra ativo, direção, expiração ("VENDA · BTCUSDT · 15 min"), preço de
+     entrada que a IA mandou, horário da entrada, vencimento, preço final e resultado WIN/LOSS/EMPATE,
+     liquidado automaticamente pela regra da Exnova; histórico com taxa de acerto e n.
+   - COMPRA/VENDA como sinal **só** para situações aprovadas. Situações ainda não aprovadas aparecem no painel
+     "Situação agora" com fundamento e histórico fora da amostra, rótulo "Histórico — não validado", sem
+     botão de entrada (opção A, recomendação do designer; o cliente respondeu "continue").
 
 ## 10. Deixado ao construtor
 
