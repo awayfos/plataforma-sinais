@@ -228,36 +228,36 @@ def test_fan_out_do_redis_streams_ate_o_websocket(amb: Ambiente) -> None:
     assert amb.pedir("so_btc", "GET", "/api/analise?simbolo=BTCUSDT").json() == json.loads(texto)
 
 
-def test_tick_do_pubsub_chega_ao_websocket_como_vela_em_formacao(amb: Ambiente) -> None:
+def test_tick_do_pubsub_chega_ao_distribuidor_como_vela_em_formacao(amb: Ambiente) -> None:
+    """Redis Pub/Sub real → GestorVelas → canal candles:BTCUSDT:1m (a entrega pelo WebSocket
+    está em tests/unit/api/test_ws.py)."""
     import time
     from decimal import Decimal
 
     from sinais.dados.negocios import canal_ticks, para_payload
     from sinais.dados.vela_formacao import Negocio
 
-    # Sem verificação periódica no meio: o cliente fecha enquanto o servidor está ocioso.
-    amb.app.servicos.ws_verificacao_s = 30
-    h = amb.cabecalhos("so_btc")
-    amb.c.cookies.clear()
-    with amb.c.websocket_connect("/api/ws", headers=h) as ws:
-        ws.send_json({"acao": "assinar", "canal": "candles:BTCUSDT:1m"})
-        n = Negocio(77, Decimal("61000.5"), Decimal("0.25"), T0 + 1234, False)
-        recebida = None
-        for _ in range(50):  # o Pub/Sub só entrega depois que a assinatura ficou ativa
-            amb.chamar(amb.redis.publish, canal_ticks("BTCUSDT"), para_payload("BTCUSDT", n))
-            time.sleep(0.1)
-            if amb.app.servicos.velas and amb.app.servicos.velas.snapshot("candles:BTCUSDT:1m"):
-                recebida = ws.receive_json()
-                break
-        assert recebida == {
-            "canal": "candles:BTCUSDT:1m",
-            "dados": {
-                "t": T0,
-                "o": "61000.5",
-                "h": "61000.5",
-                "l": "61000.5",
-                "c": "61000.5",
-                "v": "0.25",
-                "fechado": False,
-            },
-        }
+    d = amb.app.servicos.distribuidor
+    assinante = amb.chamar(d.novo_assinante)
+    amb.chamar(d.assinar, assinante, "candles:BTCUSDT:1m")
+    n = Negocio(77, Decimal("61000.5"), Decimal("0.25"), T0 + 1234, False)
+    recebida = None
+    for _ in range(50):  # o Pub/Sub só entrega depois que a assinatura ficou ativa
+        amb.chamar(amb.redis.publish, canal_ticks("BTCUSDT"), para_payload("BTCUSDT", n))
+        time.sleep(0.1)
+        if not amb.chamar(assinante.fila.empty):
+            recebida = amb.chamar(assinante.fila.get_nowait)
+            break
+    assert recebida == {
+        "canal": "candles:BTCUSDT:1m",
+        "dados": {
+            "t": T0,
+            "o": "61000.5",
+            "h": "61000.5",
+            "l": "61000.5",
+            "c": "61000.5",
+            "v": "0.25",
+            "fechado": False,
+        },
+    }
+    amb.chamar(d.remover, assinante)
