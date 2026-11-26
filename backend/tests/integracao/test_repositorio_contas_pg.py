@@ -47,3 +47,38 @@ def test_contrato_consultas_pg(
         return RepositorioCandlesPg(engine), ConsultasMercadoPg(engine)
 
     caso(fabrica)
+
+
+def test_concorrencia_real_no_postgres(url: str) -> None:
+    """Logins simultâneos e o mesmo TOTP em paralelo contra o PostgreSQL de verdade."""
+    import asyncio
+
+    from sinais.contas.servico import ErroConta
+
+    from ..unit.contas.dubles import T0, admin, ambiente, cliente, codigo_totp
+
+    async def caso() -> None:
+        engine = create_async_engine(url)
+        await limpar_contas(engine)
+        amb = ambiente(repo=RepositorioContasPg(engine))
+        u = await cliente(amb)
+        await asyncio.gather(
+            *(
+                amb.servico.login("ana@exemplo.com", "senha-forte-123", None, f"i{i}", "u")
+                for i in range(5)
+            )
+        )
+        assert len(await amb.repo.sessoes_ativas(u.id, T0)) == 1
+        await admin(amb)
+        codigo = codigo_totp(T0)
+        resultados = await asyncio.gather(
+            *(
+                amb.servico.login("admin@exemplo.com", "senha-admin-123", codigo, f"j{i}", "u")
+                for i in range(4)
+            ),
+            return_exceptions=True,
+        )
+        assert sum(not isinstance(r, ErroConta) for r in resultados) == 1
+        await engine.dispose()
+
+    asyncio.run(caso())

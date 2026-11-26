@@ -21,6 +21,7 @@ import socket
 from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
@@ -430,7 +431,8 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
         r = await motor.processar_entradas(entradas)
         for id_ in r.descartadas:
             campos = next(c for i, c in entradas if i == id_)
-            await redis.xadd(STREAM_MORTOS, {**campos, "id_original": id_}, maxlen=10_000)
+            morto: dict[Any, Any] = {**campos, "id_original": id_}
+            await redis.xadd(STREAM_MORTOS, morto, maxlen=10_000)
         ok = [i for i, _ in entradas if i not in set(r.falhas)]
         if ok:
             await redis.xack(STREAM_CANDLE_FECHADO, GRUPO, *ok)
@@ -452,7 +454,8 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
             _log.error("motor_analise.fila_morta", extra={"campos": {"id": id_}})
         if reprocessar:
             # XCLAIM entrega de novo (e conta a entrega) as que falharam.
-            entradas = await redis.xclaim(STREAM_CANDLE_FECHADO, GRUPO, consumidor, 0, reprocessar)
+            ids: list[Any] = list(reprocessar)
+            entradas = await redis.xclaim(STREAM_CANDLE_FECHADO, GRUPO, consumidor, 0, ids)
             await concluir([(i, c) for i, c in entradas if c])
 
     proxima_revisao = 0.0
