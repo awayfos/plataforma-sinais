@@ -60,6 +60,34 @@ Cada correção teve um teste enviado antes e visto falhando no CI (commit `7c8a
 
 Itens menores da revisão deixados para depois: M1, M3, M5, M7, M8, M9, M11, M12.
 
+## 2.2 Alinhamento com o backend (PR #14)
+
+Testes enviados antes (`7a2a390`: 8 falhando), verdes com a correção (`273c2e9`).
+
+| Item | O que mudou | Teste |
+|---|---|---|
+| 1 | `assinatura.plano` pode ser `null`: perfil e tela de assinatura mostram "Sem plano" | `perfil.test.tsx` › usuário sem assinatura… |
+| 2 | Campos numéricos da `Analise` podem ser `null` (ADX, volume, indicadores, impulso, desaceleração): mostram "—" | `painel-analise.test.tsx` › valores nulos… |
+| 3 | `Analise.t` é a abertura do último candle de 1m fechado: o painel mostra o minuto como intervalo (ex.: 10:30–10:31) | `painel-analise.test.tsx` › t é a abertura… |
+| 4 | `tolerancia_preco` numérica (unidades de preço), `preco_referencia` string | `cartao-sinal.test.tsx` › tolerância de preço… (passou de primeira: só tipo) |
+| 5 | Canal de candles só com `fechado: true` funciona (cada fechamento anexa a barra) | `serie-ao-vivo.test.ts` |
+| 6 | Quadros de erro `{canal, erro}` não chegam como dados; o terminal mostra a mensagem (ex.: ativo fora do plano) | `ws/cliente.test.ts` › quadro de erro…; `terminal.test.tsx` › erro do canal… |
+| 7 | Handshake recusado (4403 → 1006) com `/api/eu` válido: para o laço rápido, status "Ao vivo indisponível" e nova tentativa a cada minuto | `ws/cliente.test.ts` › modo lento…; `terminal.test.tsx` › handshake recusado… |
+| 8 | Admin: redefinir senha temporária (`PATCH {senha_temporaria}`); id numérico do plano ao criar usuário | `usuarios.test.tsx` › redefinir senha…; criar envia o id numérico… |
+| 9 | Layout do servidor lido primeiro (`usuario.layout`); cópia local só se o servidor não tiver nada | — (já lia primeiro; só o comentário e o caso `{}` mudaram) |
+| 10 | Encerrar assinatura antes do fim: **TODO** — a rota ainda não existe em `origin/plataforma-backend`; quando existir, botão "Encerrar agora" em `/admin/usuarios` e `/admin/assinaturas` | — |
+
+## 2.3 Gráfico tick a tick (como na Binance)
+
+Testes enviados antes (`06af23b`: 4 arquivos e 3 testes falhando; o e2e não chegou a rodar porque o build também faz checagem de tipos dos testes), verdes com a implementação (`5bd1a77`, `b30d251`).
+
+- `lib/serieAoVivo.ts`: mesmo `t` substitui a última barra; `t` maior anexa; `t` menor é ignorado; depois de `fechado: true` (ou de uma barra vinda do REST) um tick em formação do mesmo `t` é ignorado; tick de outro canal (troca de ativo ou de tempo gráfico) é descartado; o snapshot que chega antes do REST é guardado e reaplicado; recarregar o REST no mesmo canal (reconexão) mantém a barra em formação mais nova. Testes: `serie-ao-vivo.test.ts`.
+- `lib/agrupador.ts`: os ticks de um quadro são aplicados juntos no `requestAnimationFrame`, com fila limitada (aba em segundo plano). Teste: `agrupador.test.ts`.
+- `lib/indicadoresIncrementais.ts`: EMA 9/21, Bollinger, VWAP, RSI e MACD recalculam só a barra tocada; o resultado bate com o cálculo completo depois de ticks e barras novas. Teste: `indicadores-incrementais.test.ts`.
+- `Grafico.tsx`: os ticks não passam pelo estado do React. Cada quadro chama `update` só nas barras tocadas (velas, volume e indicadores), sem `setData`. A legenda OHLC é escrita direto no DOM. A linha e o rótulo do último preço ficam na cor da barra (alta/baixa), com a contagem até o fechamento no eixo (ex.: "00:37"), pelo relógio do servidor. Teste: `formato.test.ts` › contagem até o fechamento.
+- Preço ao vivo com piscada verde/vermelha no cabeçalho e na lista de ativos (`PrecoAoVivo`, `useSyncExternalStore`: só o número re-renderiza). Usa os ticks do gráfico e o canal opcional `preco:SIMB`. Teste: `precos.test.tsx`.
+- E2E `ticks.spec.ts`: o WebSocket simulado envia o snapshot e mais 50 ticks em 5 s no mesmo `t`. O fechamento da última barra termina igual ao último tick e a quantidade de barras não muda durante os ticks.
+
 ## 3. Pontos do contrato para o backend
 
 1. Devolver `layout` em `GET /api/eu` (hoje só existe a escrita).
@@ -85,10 +113,10 @@ Processo: os testes foram enviados antes da implementação e falharam no CI (18
 
 Resultado no CI (versões resolvidas: Next 16, React 19.3.1, TypeScript 5.9.3, Tailwind 4.3.5, Lightweight Charts 5.3.0, Vitest 4.1.12, Playwright 1.65.1):
 
-- Vitest: **18 arquivos, 77 testes, todos passando** (API e CSRF, WebSocket e reconexão, proxy, indicadores com valores calculados à mão, formatação pt-BR, login com TOTP, troca de senha, modo, lista de ativos, candle ao vivo, tabela de sinais, painel de análise, cartão com janela, histórico, usuários e payout do admin).
+- Vitest (depois das correções da revisão, do alinhamento com o backend e do gráfico tick a tick): **27 arquivos, 127 testes, todos passando**. Primeira versão: 18 arquivos, 77 testes (API e CSRF, WebSocket e reconexão, proxy, indicadores com valores calculados à mão, formatação pt-BR, login com TOTP, troca de senha, modo, lista de ativos, candle ao vivo, tabela de sinais, painel de análise, cartão com janela, histórico, usuários e payout do admin).
 - Lint: 0 erros (4 avisos de `window.location.assign`, mantido de propósito para recarregar a página e limpar o estado ao perder a sessão).
 - Build: 16 rotas.
-- Playwright: **10 testes passando** — login com TOTP, credenciais inválidas, terminal com 5 AGUARDAR e candle ao vivo pelo WebSocket simulado, modo Avançado salvo, 402 → assinatura, troca de tempo gráfico, admin lista usuários, cliente sem acesso ao admin, e capturas de tela (terminal Avançado e Essencial, celular, histórico, perfil, admin, login). Os dados das simulações ficam em `frontend/e2e/mocks.ts`, rotulados como simulação.
+- Playwright: **11 testes passando** (inclui `ticks.spec.ts`) — login com TOTP, credenciais inválidas, terminal com 5 AGUARDAR e candle ao vivo pelo WebSocket simulado, modo Avançado salvo, 402 → assinatura, troca de tempo gráfico, admin lista usuários, cliente sem acesso ao admin, e capturas de tela (terminal Avançado e Essencial, celular, histórico, perfil, admin, login). Os dados das simulações ficam em `frontend/e2e/mocks.ts`, rotulados como simulação.
 
 Revisão visual: as capturas do CI saem também no log do job (em base64), porque o ambiente de desenvolvimento não acessa o armazenamento de artefatos do GitHub. A revisão delas encontrou e corrigiu: o gráfico passava da altura da janela e escondia o volume e o painel RSI; campos de busca do admin com classes de largura em conflito; seletor de modo esticado no perfil; cabeçalho apertado no celular.
 

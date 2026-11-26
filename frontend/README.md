@@ -87,6 +87,10 @@ e2e/                       # Playwright
 - **Relógio do servidor.** A contagem da janela de entrada usa a hora do servidor estimada pelo cabeçalho `Date`
   das respostas, com 1 s de margem de segurança, e não o relógio da máquina.
 - **VWAP** é ancorado em 00:00 UTC (21:00 em Brasília) e só fica disponível em tempos intradiários.
+- **Gráfico tick a tick.** O canal `candles:SIMB:tg` manda a barra em formação (`fechado: false`) e o fechamento
+  (`fechado: true`). Os ticks vão direto para o lightweight-charts, um quadro por vez (`requestAnimationFrame`), sem
+  passar pelo estado do React; indicadores recalculam só a última barra. O rótulo do último preço mostra a
+  contagem até o fechamento do candle.
 - **Indicadores do gráfico** são calculados no navegador a partir dos candles exibidos, só para visualização. A
   análise oficial (`/api/analise`) vem do backend.
 - **Nenhum dado inventado.** Probabilidade só aparece quando o backend envia, sempre com `n`. Campos fora do
