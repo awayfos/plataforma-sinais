@@ -9,10 +9,6 @@ on:
       modo:
         description: "contagem ou avaliacao"
         default: "avaliacao"
-  # TEMPORÁRIO: roda a partir do ramo da Fase 6c (workflow_dispatch só vale para a main).
-  push:
-    branches: [fase-06c-situacoes]
-    paths: [.github/workflows/situacoes.yml]
 
 jobs:
   situacoes:
@@ -30,8 +26,7 @@ jobs:
       - run: uv sync
       - name: Rodada
         env:
-          # TEMPORÁRIO: modo da rodada disparada pelo push (2ª rodada: correção do HGB com coluna vazia)
-          MODO: ${{ inputs.modo || 'avaliacao' }}
+          MODO: ${{ inputs.modo }}
         run: |
           mkdir -p relatorio
           /usr/bin/time -v uv run python -m sinais.situacoes.relatorio --modo "$MODO" \

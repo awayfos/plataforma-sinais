@@ -11,10 +11,6 @@ on:
       argumentos:
         description: "Argumentos extras de sinais.situacoes.confirmacao"
         default: ""
-  # TEMPORÁRIO: teste de fumaça a partir do ramo da Fase 6c (meses já vistos; não confirmatório)
-  push:
-    branches: [fase-06c-situacoes]
-    paths: [.github/workflows/situacoes-confirmacao.yml]
 
 jobs:
   confirmacao:
@@ -30,14 +26,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync
-      - name: Fumaça (TEMPORÁRIO)
-        if: github.event_name == 'push'
-        run: |
-          python3 -c "import json; print(json.dumps([{'ativo': a, 'variacao': v, 'espelho': e, 'expiracao': '15m', 'camada': 'A'} for a in ('BTCUSDT', 'ETHUSDT') for v in ('S1', 'S8') for e in ('topo', 'fundo')]))" > /tmp/fumaca.json
-          uv run python -m sinais.situacoes.confirmacao --candidatas /tmp/fumaca.json \
-            --primeiro 2026-10 --aquecimento 2026-09 --ate 2026-10
       - name: Confirmação
-        if: github.event_name != 'push'
         env:
           ARGUMENTOS: ${{ inputs.argumentos || '' }}
         run: |
