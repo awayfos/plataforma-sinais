@@ -3,6 +3,17 @@
     "schemas": {
       "Acesso": {
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "evento": {
             "title": "Evento",
             "type": "string"
@@ -17,6 +28,10 @@
           },
           "t": {
             "title": "T",
+            "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
             "type": "integer"
           },
           "user_agent": {
@@ -38,10 +53,12 @@
         "required": [
           "id",
           "usuario_id",
+          "email",
           "evento",
           "ip",
           "user_agent",
-          "t"
+          "t",
+          "ts"
         ],
         "title": "Acesso",
         "type": "object"
@@ -493,6 +510,18 @@
       },
       "EventoQualidade": {
         "properties": {
+          "detalhes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detalhes"
+          },
           "fim": {
             "title": "Fim",
             "type": "integer"
@@ -777,6 +806,17 @@
             ],
             "title": "Duracao Dias"
           },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "nome": {
             "anyOf": [
               {
@@ -1019,6 +1059,17 @@
             "title": "Acao",
             "type": "string"
           },
+          "admin_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Email"
+          },
           "admin_id": {
             "title": "Admin Id",
             "type": "integer"
@@ -1058,16 +1109,22 @@
           "t": {
             "title": "T",
             "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "integer"
           }
         },
         "required": [
           "id",
           "admin_id",
+          "admin_email",
           "acao",
           "alvo",
           "antes",
           "depois",
-          "t"
+          "t",
+          "ts"
         ],
         "title": "RegistroAuditoria",
         "type": "object"
@@ -1180,6 +1237,17 @@
             ],
             "title": "N Validacao"
           },
+          "preco_referencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preco Referencia"
+          },
           "probabilidade": {
             "anyOf": [
               {
@@ -1190,6 +1258,17 @@
               }
             ],
             "title": "Probabilidade"
+          },
+          "tolerancia_preco": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerancia Preco"
           }
         },
         "required": [
@@ -1299,6 +1378,11 @@
             "title": "Id",
             "type": "integer"
           },
+          "layout": {
+            "additionalProperties": true,
+            "title": "Layout",
+            "type": "object"
+          },
           "modo": {
             "enum": [
               "essencial",
@@ -1347,6 +1431,11 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "layout": {
+            "additionalProperties": true,
+            "title": "Layout",
+            "type": "object"
           },
           "modo": {
             "enum": [
@@ -1912,6 +2001,86 @@
           }
         },
         "summary": "Listar Planos",
+        "tags": [
+          "administração"
+        ]
+      },
+      "patch": {
+        "description": "Mesma edição de ``PATCH /planos/{id}``, com o ``id`` no corpo (plano inteiro).",
+        "operationId": "editar_plano_pelo_corpo_api_admin_planos_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanoEdicao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plano"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Editar Plano Pelo Corpo",
         "tags": [
           "administração"
         ]
