@@ -112,3 +112,13 @@ def test_virada_da_semana_comeca_na_segunda() -> None:
 def test_sem_negocios_nao_ha_vela() -> None:
     b = VelaEmFormacao("BTCUSDT")
     assert b.vela(TempoGrafico.M1) is None and b.ultimo_preco() is None
+
+
+def test_primeiro_oficial_sem_carga_pede_recarga() -> None:
+    # API subiu com o banco ainda sem os 1m do período: o primeiro oficial não pode ser aceito
+    # como se fosse o único minuto do período (4h/1d/1w ficariam só com ele).
+    b = VelaEmFormacao("BTCUSDT")
+    b.carregar([])
+    assert b.fechar_1m(oficial(T9 + 2 * M, "1", "1", "1", "1", "1"))
+    assert b.precisa_recarregar
+    assert b.fechado_ate == T9 + 3 * M
