@@ -72,7 +72,7 @@ $ ruff format . && ruff check .     → All checks passed!
 $ python -m mypy                    → Success: no issues found in 189 source files
 ```
 
-**CI** (run 45649957322, commit `8e862f8`): backend, integracao, infra e fumaça verdes.
+**CI** (run 45649957322, commit `8e862f8`): backend, integracao, infra e fumaça verdes. Depois dos acréscimos pedidos pelo frontend, run 45757848951 (commit `29c7742`): os quatro jobs verdes, backend com 400 passed, 23 skipped e cobertura 97,42%, integracao com 23 passed.
 
 ```
 backend:    394 passed, 23 skipped in 21.08s
