@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sinais.api.sinais_ao_vivo import BuscaCampeao
+from sinais.api.velas import GestorVelas
 from sinais.api.ws_canais import Distribuidor, RedeIp
 from sinais.contas.admin import ServicoAdmin
 from sinais.contas.servico import ServicoContas
@@ -35,6 +36,9 @@ class Servicos:
     ativos: tuple[Ativo, ...] = ATIVOS_V1
     distribuidor: Distribuidor = field(default_factory=Distribuidor)
     fonte_eventos: FonteEventos | None = None
+    # Velas em formação (ticks) e tarefas de fundo supervisionadas pelo app.
+    velas: GestorVelas | None = None
+    tarefas: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = field(default_factory=list)
 
     @property
     def simbolos(self) -> tuple[str, ...]:

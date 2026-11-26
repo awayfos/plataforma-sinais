@@ -69,6 +69,18 @@ services:
     command: ["python", "-m", "sinais.processos.coletor_binance"]
     restart: unless-stopped
 
+  ticks:
+    # aggTrade da Binance → Redis Pub/Sub ticks:{SIMBOLO} (efêmero, não grava no banco).
+    build:
+      context: ../backend
+      dockerfile: ../infra/docker/backend.Dockerfile
+    environment: *ambiente_backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "sinais.processos.ticks_binance"]
+    restart: unless-stopped
+
   motor_analise:
     build:
       context: ../backend

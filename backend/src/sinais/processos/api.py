@@ -51,7 +51,19 @@ def montar_servicos() -> Any:  # pragma: no cover - ligação de I/O
             sessoes_simultaneas=api.sessoes_simultaneas,
         ),
     )
+    from sinais.api.eventos_redis import fonte_ticks
+    from sinais.api.velas import GestorVelas
+    from sinais.api.ws_canais import Distribuidor
+    from sinais.persistencia.repositorio_pg import RepositorioCandlesPg
+
+    distribuidor = Distribuidor()
+    velas = GestorVelas(
+        [a.simbolo for a in ATIVOS_V1], RepositorioCandlesPg(engine), RelogioSistema(), distribuidor
+    )
     return Servicos(
+        distribuidor=distribuidor,
+        velas=velas,
+        tarefas=[("velas", velas.executar), ("ticks", fonte_ticks(redis, velas))],
         contas=contas,
         admin=ServicoAdmin(contas, [a.simbolo for a in ATIVOS_V1]),
         mercado=ConsultasMercadoPg(engine),

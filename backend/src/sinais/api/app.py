@@ -22,13 +22,18 @@ VERSAO_API = "1.0.0"
 def criar_app(servicos: Servicos) -> FastAPI:
     @asynccontextmanager
     async def ciclo(_: FastAPI) -> AsyncIterator[None]:
-        tarefa: asyncio.Task[None] | None = None
+        tarefas: list[asyncio.Task[None]] = []
         fonte = servicos.fonte_eventos
         if fonte is not None:
-            tarefa = asyncio.create_task(supervisionar("fonte_eventos", lambda: fonte(servicos)))
+            tarefas.append(
+                asyncio.create_task(supervisionar("fonte_eventos", lambda: fonte(servicos)))
+            )
+        for nome, fabrica in servicos.tarefas:
+            tarefas.append(asyncio.create_task(supervisionar(nome, fabrica)))
         yield
-        if tarefa is not None:
+        for tarefa in tarefas:
             tarefa.cancel()
+        for tarefa in tarefas:
             with suppress(asyncio.CancelledError, Exception):
                 await tarefa
 

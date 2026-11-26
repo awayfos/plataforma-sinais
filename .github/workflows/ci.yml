@@ -68,6 +68,22 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker compose -f infra/docker-compose.yml --env-file .env.example config -q
 
+  ticks:
+    # Prova "100% igual à Binance": grava aggTrades reais por >= 3 minutos e compara cada
+    # minuto (e o 5m) montado tick a tick com os klines oficiais, com igualdade exata.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run python -m sinais.processos.prova_ticks --saida relatorio-ticks.md
+
   fumaca:
     # Sobe o ambiente completo e coleta dados reais da Binance (endpoint só de dados de mercado).
     runs-on: ubuntu-latest

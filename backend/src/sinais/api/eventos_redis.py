@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Callable, Coroutine, Sequence
 from typing import Any
 
 from sinais.api.servicos import FonteEventos, Servicos
 from sinais.api.sinais_ao_vivo import BuscaCampeao
+from sinais.api.velas import GestorVelas
 from sinais.api.ws_canais import Distribuidor, traduzir_evento
+from sinais.dados.negocios import ErroNegocio, de_payload
 from sinais.eventos.contratos import STREAM_ANALISE_ATUALIZADA, STREAM_CANDLE_FECHADO
 from sinais.logs import obter_logger
 
@@ -52,5 +54,41 @@ def fonte_redis(redis: Any, bloqueio_ms: int = 5000) -> FonteEventos:  # pragma:
                 await asyncio.sleep(1)
                 continue
             distribuir_resposta(resposta, ultimos, s.distribuidor, s.campeao)
+            if s.velas is not None:
+                for stream, entradas in resposta or []:
+                    if stream != STREAM_CANDLE_FECHADO:
+                        continue
+                    for _, campos in entradas:
+                        try:
+                            await s.velas.ao_fechado(campos)
+                        except Exception as erro:
+                            _log.error(
+                                "api.vela_fechamento_falhou",
+                                extra={"campos": {"erro": type(erro).__name__}},
+                            )
 
     return ler
+
+
+def fonte_ticks(
+    redis: Any, velas: GestorVelas
+) -> Callable[[], Coroutine[Any, Any, None]]:  # pragma: no cover - CI
+    """Assina ``ticks:*`` no Pub/Sub e entrega cada negócio à vela em formação."""
+
+    async def ouvir() -> None:
+        pubsub = redis.pubsub()
+        await pubsub.psubscribe("ticks:*")
+        try:
+            async for msg in pubsub.listen():
+                if msg.get("type") != "pmessage":
+                    continue
+                try:
+                    simbolo, n = de_payload(msg["data"])
+                except ErroNegocio as erro:
+                    _log.error("api.tick_invalido", extra={"campos": {"erro": str(erro)}})
+                    continue
+                velas.ao_negocio(simbolo, n)
+        finally:
+            await pubsub.aclose()
+
+    return ouvir

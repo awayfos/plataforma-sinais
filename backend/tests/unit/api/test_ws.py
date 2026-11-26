@@ -166,3 +166,53 @@ def test_plano_reduzido_durante_a_conexao_cancela_o_canal_do_ativo() -> None:
             assert msg["canal"] == "sinais:ETHUSDT"
             assert msg["erro"]["codigo"] == "ativo_nao_incluido"
             assert c.portal.call(app.servicos.distribuidor.publicar, "sinais:ETHUSDT", []) == 0
+
+
+def test_vela_em_formacao_no_websocket_com_foto_na_assinatura() -> None:
+    from decimal import Decimal
+
+    from sinais.api.velas import GestorVelas
+    from sinais.core.tempo import RelogioFixo
+    from sinais.dados.vela_formacao import Negocio
+    from sinais.persistencia.memoria import RepositorioCandlesMemoria
+
+    app = preparar()
+    velas = GestorVelas(
+        ["BTCUSDT", "ETHUSDT"],
+        RepositorioCandlesMemoria(),
+        RelogioFixo(T0),
+        app.servicos.distribuidor,
+    )
+    app.servicos.velas = velas
+    app.servicos.tarefas = [("velas", lambda: velas.executar(0.01))]
+    velas.ao_negocio("BTCUSDT", Negocio(1, Decimal("100"), Decimal("1"), T0 + 5, False))
+    velas.drenar()  # já "publicado": a próxima mensagem será só a foto da assinatura
+    with app.cliente() as c:
+        entrar(c, "ana@exemplo.com", SENHA)
+        with c.websocket_connect("/api/ws", headers=cabecalho(c)) as ws:
+            ws.send_json({"acao": "assinar", "canal": "candles:BTCUSDT:5m"})
+            foto = ws.receive_json()
+            assert foto == {
+                "canal": "candles:BTCUSDT:5m",
+                "dados": {
+                    "t": T0,
+                    "o": "100",
+                    "h": "100",
+                    "l": "100",
+                    "c": "100",
+                    "v": "1",
+                    "fechado": False,
+                },
+            }
+            ws.send_json({"acao": "assinar", "canal": "preco:BTCUSDT"})
+            assert ws.receive_json()["dados"] == {"preco": "100", "t": T0 + 5}
+            assert c.portal is not None
+            n = Negocio(2, Decimal("101.5"), Decimal("2"), T0 + 9, False)
+            c.portal.call(velas.ao_negocio, "BTCUSDT", n)
+            recebidas: dict[str, dict[str, object]] = {}
+            while len(recebidas) < 2:
+                m = ws.receive_json()
+                recebidas[m["canal"]] = m["dados"]
+            assert recebidas["candles:BTCUSDT:5m"]["c"] == "101.5"
+            assert recebidas["candles:BTCUSDT:5m"]["v"] == "3"
+            assert recebidas["preco:BTCUSDT"] == {"preco": "101.5", "t": T0 + 9}

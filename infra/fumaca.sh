@@ -8,7 +8,7 @@ COMPOSE="docker compose -f infra/docker-compose.yml --env-file ${ENV_FILE:-.env.
 API=http://127.0.0.1:8000
 TMP=$(mktemp -d)
 $COMPOSE up -d --build
-trap '$COMPOSE logs --tail=50 coletor motor_analise api; $COMPOSE down -v; rm -rf "$TMP"' EXIT
+trap '$COMPOSE logs --tail=50 coletor ticks motor_analise api; $COMPOSE down -v; rm -rf "$TMP"' EXIT
 
 # Espera até 5 min pelos primeiros eventos ao vivo (o histórico é baixado antes).
 for i in $(seq 1 300); do
@@ -23,6 +23,11 @@ echo "candles_1m=$m1 candles_1s=$s1 eventos_candle_fechado=$ev"
 { [ "$m1" -gt 0 ] && [ "$s1" -gt 0 ] && [ "$ev" -gt 0 ]; } || { echo "FALHOU: coleta sem dados"; exit 1; }
 echo "Conferência da agregação local contra os candles oficiais da Binance:"
 $COMPOSE exec -T coletor python -m sinais.dados.conferencia
+
+echo "== Ticks (aggTrade → Pub/Sub) =="
+ticks=$( (timeout 15 $COMPOSE exec -T redis redis-cli PSUBSCRIBE 'ticks:*' || true) | grep -c '"preco"' || true)
+echo "ticks recebidos em 15 s: $ticks"
+[ "${ticks:-0}" -gt 0 ] || { echo "FALHOU: nenhum tick no Pub/Sub"; exit 1; }
 
 echo "== API =="
 for i in $(seq 1 120); do

@@ -19,7 +19,7 @@ from sinais.api.sinais_ao_vivo import EXPIRACOES, BuscaCampeao, sinais_para
 from sinais.core.dominio import TempoGrafico
 from sinais.eventos.contratos import STREAM_ANALISE_ATUALIZADA, STREAM_CANDLE_FECHADO
 
-type TipoCanal = Literal["candles", "analise", "sinais"]
+type TipoCanal = Literal["candles", "analise", "sinais", "preco"]
 TAMANHO_MAXIMO = 512
 _POR_DURACAO = {tg.duracao_ms: tg.value for tg in TempoGrafico}
 
@@ -60,7 +60,7 @@ def interpretar(
         raise ErroMensagem("canal ou ativo desconhecido")
     if tipo == "candles" and len(partes) == 3 and partes[2] in _POR_DURACAO.values():
         return acao, Canal("candles", partes[1], partes[2])
-    if tipo in ("analise", "sinais") and len(partes) == 2:
+    if tipo in ("analise", "sinais", "preco") and len(partes) == 2:
         return acao, Canal(tipo, partes[1], None)  # type: ignore[arg-type]
     raise ErroMensagem("canal desconhecido")
 
@@ -120,6 +120,9 @@ class Distribuidor:
         if a.fila.full():
             a.fila.get_nowait()
         a.fila.put_nowait(mensagem)
+
+    def tem_assinantes(self, canal: str) -> bool:
+        return bool(self._por_canal.get(canal))
 
     def publicar(self, canal: str, dados: Any) -> int:
         grupo = self._por_canal.get(canal, set())

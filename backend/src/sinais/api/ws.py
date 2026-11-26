@@ -97,6 +97,10 @@ class ConexaoWs:
             texto = await self._s.analises.obter(simbolo)
             if texto is not None:
                 self._enfileirar({"canal": nome, "dados": json.loads(texto)})
+        elif tipo in ("candles", "preco"):
+            foto = self._s.velas.snapshot(nome) if self._s.velas is not None else None
+            if foto is not None:
+                self._enfileirar({"canal": nome, "dados": foto})
         elif tipo == "sinais":
             lista = sinais_para(simbolo, EXPIRACOES, self._s.campeao)
             self._enfileirar({"canal": nome, "dados": [x.model_dump() for x in lista]})
