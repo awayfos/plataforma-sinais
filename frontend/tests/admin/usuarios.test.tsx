@@ -5,7 +5,7 @@ import { GestaoUsuarios } from "@/components/admin/GestaoUsuarios";
 import { caminho, simularFetch, type Chamada } from "../apoio/fetch";
 
 const usuarios = [
-  { id: 7, email: "ana@teste.local", nome: "Ana Souza", papel: "cliente", status: "ativo", assinatura: { plano: "Mensal", status: "ativa", vence_em: Date.parse("2026-12-25T03:00:00Z") } },
+  { id: 7, email: "ana@teste.local", nome: "Ana Souza", papel: "cliente", status: "ativo", assinatura: { plano: "Mensal", status: "ativa", vence_em: Date.parse("2026-12-25T03:00:00Z") }, assinatura_id: 31 },
   { id: 8, email: "bia@teste.local", nome: "Bia Lima", papel: "cliente", status: "bloqueado", assinatura: null },
 ];
 const planos = [
@@ -19,6 +19,8 @@ function backend(): Chamada[] {
     if (p === "/api/admin/planos") return { corpo: planos };
     if (p.startsWith("/api/admin/usuarios/") && c.metodo === "PATCH") return { corpo: { ...usuarios[0], status: "bloqueado" } };
     if (p === "/api/admin/usuarios" && c.metodo === "POST") return { status: 201, corpo: usuarios[0] };
+    if (p === "/api/admin/assinaturas/31/encerrar" && c.metodo === "POST")
+      return { corpo: { id: 31, usuario_id: 7, plano_id: 1, inicio: 0, fim: Date.now(), origem: "manual" } };
     return undefined;
   });
 }
@@ -48,6 +50,30 @@ describe("GestaoUsuarios", () => {
       expect(caminho(patch.url)).toBe("/api/admin/usuarios/7");
       expect(patch.corpo).toEqual({ status: "bloqueado" });
     });
+  });
+
+  it("encerrar assinatura pede confirmação e envia POST /api/admin/assinaturas/{id}/encerrar", async () => {
+    const chamadas = backend();
+    const user = userEvent.setup();
+    render(<GestaoUsuarios />);
+    const linha = (await screen.findByText("ana@teste.local")).closest("tr")!;
+    // só quem tem assinatura vigente tem o botão
+    const bia = screen.getByText("bia@teste.local").closest("tr")!;
+    expect(within(bia).queryByRole("button", { name: /Encerrar assinatura/ })).toBeNull();
+    await user.click(within(linha).getByRole("button", { name: "Encerrar assinatura de Ana Souza" }));
+    expect(within(linha).getByText(/O acesso termina na hora/)).toBeInTheDocument();
+    expect(chamadas.some((c) => c.url.includes("/encerrar"))).toBe(false);
+    await user.click(within(linha).getByRole("button", { name: "Cancelar" }));
+    expect(chamadas.some((c) => c.url.includes("/encerrar"))).toBe(false);
+    await user.click(within(linha).getByRole("button", { name: "Encerrar assinatura de Ana Souza" }));
+    await user.click(within(linha).getByRole("button", { name: "Confirmar encerramento" }));
+    await vi.waitFor(() => {
+      const post = chamadas.find((c) => c.url.includes("/encerrar"))!;
+      expect(post.metodo).toBe("POST");
+      expect(caminho(post.url)).toBe("/api/admin/assinaturas/31/encerrar");
+    });
+    // a lista é recarregada depois da ação
+    await vi.waitFor(() => expect(chamadas.filter((c) => caminho(c.url) === "/api/admin/usuarios").length).toBeGreaterThan(1));
   });
 
   it("redefinir senha envia PATCH {senha_temporaria} validada", async () => {

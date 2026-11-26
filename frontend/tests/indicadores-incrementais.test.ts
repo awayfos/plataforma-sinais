@@ -63,4 +63,32 @@ describe("IndicadoresIncrementais", () => {
     expect(inc.aplicar(ultimo)).toMatchObject({ indice: 30, nova: true });
     expect(inc.aplicar({ ...ultimo, c: 1 })).toMatchObject({ indice: 30, nova: false });
   });
+
+  it("oficial atrasado de uma barra anterior recalcula dali em diante e bate com o cálculo completo", () => {
+    const final = serie(120);
+    const inc = new IndicadoresIncrementais();
+    const previa = final.map((x, i) => (i === 117 ? { ...x, c: x.c + 3, h: x.h + 3 } : x));
+    inc.carregar(previa); // barra 117 ainda com o valor dos ticks, 118 e 119 já em formação
+    expect(inc.aplicar(final[117]!)).toEqual({ indice: 117, nova: false, desde: 117 });
+    const c = final.map((x) => x.c);
+    const s = inc.series();
+    comparar(s.ema9, ema(c, 9));
+    comparar(s.ema21, ema(c, 21));
+    comparar(s.bbMedia, bollinger(c, 20, 2).media);
+    comparar(s.vwap, vwap(final));
+    comparar(s.rsi, rsi(c, 14));
+    const m = macd(c);
+    comparar(s.macd, m.macd);
+    comparar(s.macdSinal, m.sinal);
+    comparar(s.macdHist, m.histograma);
+  });
+
+  it("barra anterior que não existe na série é ignorada", () => {
+    const inc = new IndicadoresIncrementais();
+    const base = serie(30);
+    inc.carregar(base);
+    const r = inc.aplicar({ ...base[10]!, t: base[10]!.t + 1 });
+    expect(r).toEqual({ indice: 29, nova: false, desde: 30 });
+  });
 });
+

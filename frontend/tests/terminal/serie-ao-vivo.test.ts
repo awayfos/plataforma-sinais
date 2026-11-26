@@ -74,4 +74,49 @@ describe("SerieAoVivo (fusão de ticks)", () => {
     expect(s.aplicarLote(lote)).toEqual([2, 3]);
     expect(s.candles.at(-1)!.c).toBe("2.4");
   });
+
+  it("fechamento oficial que chega depois de 3 ticks da barra seguinte substitui a barra certa", () => {
+    const s = nova();
+    s.aplicar(CANAL, k(120, "2"));
+    expect(s.aplicar(CANAL, k(180, "2.3"))).toMatchObject({ tipo: "anexado", indice: 3 });
+    expect(s.aplicar(CANAL, k(180, "2.4"))).toMatchObject({ tipo: "substituido", indice: 3 });
+    expect(s.aplicar(CANAL, k(180, "2.5"))).toMatchObject({ tipo: "substituido", indice: 3 });
+    // o 1m oficial de 120 chega 1–2 s depois da virada: reconcilia a barra 120, não a última
+    expect(s.aplicar(CANAL, k(120, "2.05", true))).toMatchObject({ tipo: "substituido", indice: 2 });
+    expect(s.candles[2]).toMatchObject({ t: 120, c: "2.05", fechado: true });
+    expect(s.candles.at(-1)).toMatchObject({ t: 180, c: "2.5", fechado: false });
+    expect(s.candles).toHaveLength(4);
+    // tick em formação atrasado de 120 continua ignorado
+    expect(s.aplicar(CANAL, k(120, "9")).tipo).toBe("ignorado");
+  });
+
+  it("no mesmo quadro, o oficial atrasado e o tick novo tocam as duas barras em ordem", () => {
+    const s = nova();
+    s.aplicar(CANAL, k(120, "2"));
+    s.aplicar(CANAL, k(180, "2.3"));
+    const lote = [k(180, "2.4"), k(120, "2.05", true), k(180, "2.6")].map((tick) => ({ canal: CANAL, tick }));
+    expect(s.aplicarLote(lote)).toEqual([2, 3]);
+  });
+
+  it("oficial de uma barra que não está entre as últimas é ignorado", () => {
+    const s = nova();
+    for (let t = 120; t <= 120 + 60 * 10; t += 60) s.aplicar(CANAL, k(t, "2"));
+    expect(s.aplicar(CANAL, k(0, "7", true)).tipo).toBe("ignorado");
+    expect(s.aplicar(CANAL, k(90, "7", true)).tipo).toBe("ignorado"); // t que não existe
+    expect(s.candles[0]!.c).toBe("1.5");
+  });
+
+  it("espera de canais ainda não carregados é limitada e some ao cancelar", () => {
+    const s = nova();
+    for (let i = 0; i < 20; i++) s.aplicar(`candles:ATIVO${i}USDT:1m`, k(120, "2"));
+    expect(s.canaisEmEspera().length).toBeLessThanOrEqual(SerieAoVivo.MAX_CANAIS_ESPERA);
+    expect(s.canaisEmEspera()).toContain("candles:ATIVO19USDT:1m");
+    s.descartarEspera("candles:ATIVO19USDT:1m");
+    expect(s.canaisEmEspera()).not.toContain("candles:ATIVO19USDT:1m");
+    // ao carregar um canal, as esperas dos outros canais são descartadas
+    s.aplicar("candles:ETHUSDT:1m", k(120, "3"));
+    s.carregar("candles:ETHUSDT:1m", base);
+    expect(s.candles.at(-1)).toMatchObject({ t: 120, c: "3" });
+    expect(s.canaisEmEspera()).toEqual([]);
+  });
 });

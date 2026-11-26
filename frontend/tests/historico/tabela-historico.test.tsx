@@ -36,6 +36,9 @@ describe("Historico", () => {
     const user = userEvent.setup();
     render(<Historico />);
     expect(await screen.findByTestId("resumo-taxa")).toHaveTextContent("50,0%");
+    // "Todos": sem simbolo na consulta (o backend devolve todos os ativos do plano)
+    const primeira = chamadas.find((c) => caminho(c.url) === "/api/sinais/historico")!;
+    expect(new URL(primeira.url, "http://x").searchParams.has("simbolo")).toBe(false);
     await user.selectOptions(screen.getByLabelText("Ativo"), "BTCUSDT");
     await vi.waitFor(() => {
       const ultima = chamadas.filter((c) => caminho(c.url) === "/api/sinais/historico").at(-1)!;
