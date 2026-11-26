@@ -20,8 +20,8 @@ import pandas as pd
 
 from sinais.analise import padroes_candle as pc
 from sinais.analise.estrutura import estrutura, pivos
-from sinais.analise.indicadores import adx, rsi
-from sinais.situacoes.base import Base
+from sinais.analise.indicadores import adx, macd, rsi
+from sinais.situacoes.base import Base, Quadro
 from sinais.situacoes.eventos import evento
 from sinais.situacoes.parametros import (
     MINUTO_MS,
@@ -30,6 +30,9 @@ from sinais.situacoes.parametros import (
     ParamS3,
     ParamS4,
     ParamS5,
+    ParamS6,
+    ParamS7,
+    ParamS8,
 )
 from sinais.situacoes.zonas import Zonas
 
@@ -321,4 +324,187 @@ def detectar_s5(base: Base, p: ParamS5, nome: str = "S5") -> list[Linha]:
             nivel = float(valores[ps[1] + p.k_pivo_5m])
             espelho = "topo" if lado == -1 else "fundo"
             saida.append(evento(base.decisao[i], nome, "S5", espelho, nivel=nivel))
+    return saida
+
+
+# ---------------------------------------------------------------- 15m (S6, S7, S8)
+
+
+def _janela_contigua(q: Quadro, j: int, n: int) -> bool:
+    return j >= n - 1 and q.t[j] - q.t[j - n + 1] == (n - 1) * (q.fech[0] - q.t[0])
+
+
+def _corridas(marca: np.ndarray) -> list[int]:
+    """Início (posição) de cada sequência de ``True`` consecutivos."""
+    anterior = np.concatenate([[False], marca[:-1]])
+    return [int(x) for x in np.flatnonzero(marca & ~anterior)]
+
+
+@dataclass(frozen=True)
+class _ZonaS6:
+    lado: int  # +1 máxima (topo), −1 mínima (fundo)
+    extremo: float
+    tol: float
+    toques: int
+    inicio_ultimo_toque: int  # ms
+
+
+def _zona_s6(q: Quadro, j: int, p: ParamS6, lado: int) -> _ZonaS6 | None:
+    ini = j - p.janela_15m + 1
+    tol = p.tolerancia_atr15 * q.atr[j]
+    if math.isnan(tol):
+        return None
+    if lado == 1:
+        ext = float(q.h[ini : j + 1].max())
+        toca = q.h[ini : j + 1] >= ext - tol
+        recuou = q.c[ini : j + 1] < ext - tol
+    else:
+        ext = float(q.l[ini : j + 1].min())
+        toca = q.l[ini : j + 1] <= ext + tol
+        recuou = q.c[ini : j + 1] > ext + tol
+    if (toca & ~recuou).any() or toca[-1]:
+        return None
+    corridas = _corridas(toca)
+    if not p.toques_previos_min <= len(corridas) <= p.toques_previos_max:
+        return None
+    return _ZonaS6(lado, ext, float(tol), len(corridas), int(q.t[ini + corridas[-1]]))
+
+
+def detectar_s6(base: Base, p: ParamS6, nome: str = "S6") -> list[Linha]:
+    q = base.q15
+    novo = _blocos_novos(base.idx15)
+    h, lo, c, pr, d = base.h, base.l, base.c, base.pressao, base.decisao
+    zonas: list[_ZonaS6] = []
+    bloco_max = bloco_min = math.nan
+    saida: list[Linha] = []
+    for i in range(len(c)):
+        j = novo[i]
+        if j >= 0:
+            zonas = []
+            if _janela_contigua(q, int(j), p.janela_15m):
+                for lado in (1, -1):
+                    z = _zona_s6(q, int(j), p, lado)
+                    if z is not None:
+                        zonas.append(z)
+            bloco_max, bloco_min = -math.inf, math.inf
+            continue  # o candle i fecha o bloco j; o novo toque vem no bloco seguinte
+        if base.idx15[i] < 0:
+            zonas = []
+            continue
+        bloco_max, bloco_min = max(bloco_max, h[i]), min(bloco_min, lo[i])
+        for z in list(zonas):
+            if z.lado == 1:
+                rompeu = bloco_max > z.extremo + z.tol
+                dispara = h[i] >= z.extremo - z.tol and c[i] < z.extremo - z.tol
+                dispara = dispara and _lt(pr[i], p.pressao_max)
+            else:
+                rompeu = bloco_min < z.extremo - z.tol
+                dispara = lo[i] <= z.extremo + z.tol and c[i] > z.extremo + z.tol
+                dispara = dispara and _gt(pr[i], 1 - p.pressao_max)
+            if rompeu:
+                zonas.remove(z)
+            elif dispara:
+                saida.append(
+                    evento(
+                        d[i], nome, "S6", "topo" if z.lado == 1 else "fundo",
+                        nivel=z.extremo, ordem_toque=z.toques + 1,
+                        min_entre_toques=(int(d[i]) - z.inicio_ultimo_toque) / MINUTO_MS,
+                    )
+                )  # fmt: skip
+                zonas.remove(z)
+    return saida
+
+
+def detectar_s7(base: Base, p: ParamS7, nome: str = "S7") -> list[Linha]:
+    q = base.q15
+    k = p.k_pivo_15m
+    pv = pivos(q.df, k)
+    topos, fundos = pv["topo"].to_numpy(), pv["fundo"].to_numpy()
+    if len(q.df):
+        r = rsi(q.df["c"]).to_numpy(dtype="float64")
+        hist = macd(q.df["c"])["hist"].to_numpy(dtype="float64")
+    else:
+        r = hist = np.zeros(0)
+    novo = _blocos_novos(base.idx15)
+    h, lo, c, v, vb, d = base.h, base.l, base.c, base.v, base.vb, base.decisao
+    soma_v = pd.Series(v).rolling(p.candles_pressao, min_periods=p.candles_pressao).sum()
+    soma_vb = pd.Series(vb).rolling(p.candles_pressao, min_periods=p.candles_pressao).sum()
+    pressao_n = (soma_vb / soma_v.where(soma_v > 0)).to_numpy(dtype="float64")
+    anterior: dict[int, int] = {}  # lado → candle do pivô anterior
+    setups: dict[int, tuple[float, float, int]] = {}  # lado → (extremo, distância máx., fim)
+    saida: list[Linha] = []
+    for i in range(len(c)):
+        for lado, (ext, dist, fim) in list(setups.items()):
+            if d[i] > fim or (h[i] > ext if lado == 1 else lo[i] < ext):
+                del setups[lado]
+                continue
+            if lado == 1:
+                ok = _lt(pressao_n[i], p.pressao_max) and c[i] >= ext - dist
+            else:
+                ok = _gt(pressao_n[i], 1 - p.pressao_max) and c[i] <= ext + dist
+            if ok:
+                espelho = "topo" if lado == 1 else "fundo"
+                saida.append(evento(d[i], nome, "S7", espelho, nivel=ext))
+                del setups[lado]
+        j = int(novo[i])
+        if j < 0:
+            continue
+        for lado, valores in ((1, topos), (-1, fundos)):
+            if math.isnan(valores[j]):
+                continue
+            atual = j - k
+            ant = anterior.get(lado)
+            anterior[lado] = atual
+            if ant is None or atual - ant > p.distancia_max_pivos_15m:
+                continue
+            if lado == 1:
+                preco_ok = q.h[atual] > q.h[ant]
+                div = _lt(r[atual], r[ant]) or _lt(hist[atual], hist[ant])
+            else:
+                preco_ok = q.l[atual] < q.l[ant]
+                div = _gt(r[atual], r[ant]) or _gt(hist[atual], hist[ant])
+            dist = p.distancia_max_atr15 * q.atr[j]
+            if preco_ok and div and not math.isnan(dist):
+                fim = int(d[i]) + p.janela_confirmacao_min * MINUTO_MS
+                setups[lado] = (float(valores[j]), float(dist), fim)
+    return saida
+
+
+def detectar_s8(base: Base, p: ParamS8, nome: str = "S8") -> list[Linha]:
+    q = base.q15
+    a = adx(q.df)["adx"].to_numpy(dtype="float64") if len(q.df) else np.zeros(0)
+    novo = _blocos_novos(base.idx15)
+    h, lo, c, pr, d = base.h, base.l, base.c, base.pressao, base.decisao
+    faixa: tuple[float, float, float] | None = None  # (topo, fundo, banda)
+    lados: set[int] = set()
+    bloco_max = bloco_min = math.nan
+    saida: list[Linha] = []
+    for i in range(len(c)):
+        j = int(novo[i])
+        if j >= 0:
+            faixa, lados = None, set()
+            if _janela_contigua(q, j, p.janela_15m) and _lt(a[j], p.adx_max):
+                ini = j - p.janela_15m + 1
+                topo, fundo = float(q.h[ini : j + 1].max()), float(q.l[ini : j + 1].min())
+                largura = (topo - fundo) / q.atr[j]
+                if p.largura_min_atr15 <= largura <= p.largura_max_atr15:
+                    faixa, lados = (topo, fundo, p.faixa_extremo * (topo - fundo)), {1, -1}
+            bloco_max, bloco_min = -math.inf, math.inf
+            continue
+        if faixa is None or base.idx15[i] < 0:
+            continue
+        topo, fundo, banda = faixa
+        bloco_max, bloco_min = max(bloco_max, h[i]), min(bloco_min, lo[i])
+        if bloco_max > topo + banda:
+            lados.discard(1)
+        if bloco_min < fundo - banda:
+            lados.discard(-1)
+        if 1 in lados and h[i] >= topo - banda and c[i] < topo - banda:
+            if _lt(pr[i], p.pressao_max):
+                saida.append(evento(d[i], nome, "S8", "topo", nivel=topo))
+                lados.discard(1)
+        if -1 in lados and lo[i] <= fundo + banda and c[i] > fundo + banda:
+            if _gt(pr[i], 1 - p.pressao_max):
+                saida.append(evento(d[i], nome, "S8", "fundo", nivel=fundo))
+                lados.discard(-1)
     return saida

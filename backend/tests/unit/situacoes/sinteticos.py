@@ -64,19 +64,23 @@ def de_barras(
     pavio: float = 0.2,
     t0: int = T0,
     pressao: float = 0.5,
+    maximas: dict[int, float] | None = None,
+    minimas: dict[int, float] | None = None,
 ) -> pd.DataFrame:
     """Expande barras (abertura = fechamento anterior) em ``por_barra`` candles de 1m cuja agregação
-    reproduz exatamente a barra: fechamentos interpolados, máxima no 2º minuto e mínima no 4º."""
+    reproduz exatamente a barra: fechamentos interpolados, máxima no 2º minuto e mínima no 4º.
+    ``maximas``/``minimas`` trocam a máxima/mínima de barras específicas (índice → preço)."""
     cb = np.asarray(c_barras, dtype="float64")
     ob = np.concatenate([[cb[0]], cb[:-1]])
     linhas_c, linhas_h, linhas_l, linhas_o = [], [], [], []
-    for o, c in zip(ob, cb, strict=True):
+    maximas, minimas = maximas or {}, minimas or {}
+    for b, (o, c) in enumerate(zip(ob, cb, strict=True)):
         fech = o + (c - o) * np.arange(1, por_barra + 1) / por_barra
         aber = np.concatenate([[o], fech[:-1]])
         h = np.maximum(aber, fech) + 0.01
         lo = np.minimum(aber, fech) - 0.01
-        h[1 % por_barra] = max(o, c) + pavio
-        lo[3 % por_barra] = min(o, c) - pavio
+        h[1 % por_barra] = maximas.get(b, max(o, c) + pavio)
+        lo[3 % por_barra] = minimas.get(b, min(o, c) - pavio)
         linhas_c.append(fech)
         linhas_o.append(aber)
         linhas_h.append(h)
