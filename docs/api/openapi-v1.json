@@ -1694,6 +1694,99 @@
         ]
       }
     },
+    "/api/admin/assinaturas/{assinatura_id}/encerrar": {
+      "post": {
+        "description": "Antecipa o fim da assinatura para agora (auditado). O usuário perde o acesso na hora.",
+        "operationId": "encerrar_assinatura_api_admin_assinaturas__assinatura_id__encerrar_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assinatura_id",
+            "required": true,
+            "schema": {
+              "title": "Assinatura Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assinatura"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaErro"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Encerrar Assinatura",
+        "tags": [
+          "administração"
+        ]
+      }
+    },
     "/api/admin/auditoria": {
       "get": {
         "operationId": "auditoria_api_admin_auditoria_get",

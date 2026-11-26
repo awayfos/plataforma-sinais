@@ -66,6 +66,10 @@ def instalar(app: FastAPI, https: bool = True) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, erro: StarletteHTTPException) -> JSONResponse:
+        if erro.status_code == 400:
+            # O FastAPI responde 400 quando não consegue ler o corpo (ex.: JSON aninhado demais
+            # para o parser). Para o cliente é dado inválido, como no contrato: 422.
+            return resposta_erro(422, "validacao", "Dados inválidos: corpo da requisição ilegível.")
         codigo, mensagem = _POR_STATUS.get(erro.status_code, ("erro", "Erro na requisição."))
         return resposta_erro(erro.status_code, codigo, mensagem)
 
