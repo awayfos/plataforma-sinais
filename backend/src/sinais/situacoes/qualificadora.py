@@ -41,16 +41,34 @@ class ResultadoB:
     linhas_treino_min: int = 0
 
 
-def treinar_qualificadora(x: np.ndarray, y: np.ndarray) -> ModeloCalibrado:
+@dataclass
+class _ComColunas:
+    """Modelo treinado só nas colunas com algum valor no treino (o HGB do scikit-learn 1.9 falha
+    no binning de uma coluna inteira de NaN, ex.: ``ordem_toque`` em S1). Coluna toda vazia não
+    carrega informação: tirá-la não muda o modelo."""
+
+    colunas: np.ndarray
+    modelo: ModeloCalibrado
+
+    def probabilidade(self, x: np.ndarray) -> np.ndarray:
+        return self.modelo.probabilidade(x[:, self.colunas])
+
+
+def treinar_qualificadora(x: np.ndarray, y: np.ndarray) -> _ComColunas:
     """``x`` em ordem de tempo. Isotônica por ``TimeSeriesSplit`` dentro do próprio treino."""
     if len(np.unique(y)) < 2:
         raise ErroTreino("treino: só há uma classe")
     base = HistGradientBoostingClassifier(**HIPERPARAMETROS)
     cv = TimeSeriesSplit(n_splits=DOBRAS_CV_B)
+    # o treino de cada parte da validação cruzada é um prefixo: basta olhar o menor
+    menor = next(iter(cv.split(x)))[0]
+    colunas = np.flatnonzero(~np.isnan(x[menor]).all(axis=0))
+    x = x[:, colunas]
     for tr, _ in cv.split(x):
         if len(np.unique(y[tr])) < 2:
             raise ErroTreino("validação cruzada temporal: parte com uma classe só")
-    return ModeloCalibrado(CalibratedClassifierCV(base, method="isotonic", cv=cv).fit(x, y))
+    calibrado = CalibratedClassifierCV(base, method="isotonic", cv=cv).fit(x, y)
+    return _ComColunas(colunas, ModeloCalibrado(calibrado))
 
 
 def escolher_limiar(

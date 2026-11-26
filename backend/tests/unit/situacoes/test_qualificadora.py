@@ -58,3 +58,14 @@ def test_b_libera_os_eventos_com_sinal_plantado() -> None:
 def test_b_nao_tentada_com_menos_de_1000_linhas_de_treino() -> None:
     dados, colunas = _dados(3_000)
     assert avaliar_b(dados, colunas, P, P_EQ) is None
+
+
+def test_coluna_toda_vazia_nao_quebra_o_treino() -> None:
+    """Achado da 1ª rodada real: em S1 ``ordem_toque`` é sempre NaN e o HGB falha no binning."""
+    from sinais.situacoes.qualificadora import treinar_qualificadora
+
+    rng = np.random.default_rng(1)
+    x = np.column_stack([rng.normal(0, 1, 2000), np.full(2000, np.nan)]).astype("float32")
+    y = (rng.random(2000) < 0.5).astype("int64")
+    p = treinar_qualificadora(x, y).probabilidade(x)
+    assert p.shape == (2000,) and np.isfinite(p).all()
