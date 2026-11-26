@@ -52,7 +52,7 @@ describe("ClienteTempoReal", () => {
       { acao: "assinar", canal: "sinais:BTCUSDT" },
     ]);
     sockets[0]!.receber({ canal: "sinais:BTCUSDT", dados: [] });
-    expect(sinais).toHaveBeenCalledWith([]);
+    expect(sinais).toHaveBeenCalledWith([], "sinais:BTCUSDT");
     expect(candles).not.toHaveBeenCalled();
   });
 
