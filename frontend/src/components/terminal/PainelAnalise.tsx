@@ -136,16 +136,25 @@ export function PainelAnalise({
       <Secao titulo="Tendência" termo="tendencia">
         <div className="grid grid-cols-4 gap-1.5">
           {TEMPOS.map((tg) => {
-            const t = TENDENCIA[`${analise.tendencia[tg]}`] ?? TENDENCIA["0"];
+            const valor = analise.tendencia[tg] as Direcao3 | undefined;
+            const t = valor === undefined ? null : (TENDENCIA[`${valor}`] ?? null);
             return (
-              <div key={tg} data-testid={`tendencia-${tg}`} className={`rounded border px-2 py-1.5 text-center ${t.cor}`}>
+              <div
+                key={tg}
+                data-testid={`tendencia-${tg}`}
+                className={`rounded border px-2 py-1.5 text-center ${t ? t.cor : "border-borda text-apagado"}`}
+              >
                 <span className="num block text-[10px] text-apagado">{tg}</span>
-                <span className="text-xs font-semibold">
-                  <span aria-hidden="true" className="mr-1 text-[0.7em]">
-                    {t.icone}
+                {t ? (
+                  <span className="text-xs font-semibold">
+                    <span aria-hidden="true" className="mr-1 text-[0.7em]">
+                      {t.icone}
+                    </span>
+                    {t.texto}
                   </span>
-                  {t.texto}
-                </span>
+                ) : (
+                  <span className="text-xs" title="Sem dado deste tempo gráfico">—</span>
+                )}
               </div>
             );
           })}

@@ -6,11 +6,27 @@ import { ErroApi } from "@/lib/api/cliente";
 import { api } from "@/lib/api/endpoints";
 import { botao, campo, campoBase, rotulo } from "@/components/ui/estilos";
 
-/** Só caminhos internos (evita redirecionamento aberto). */
+const PADRAO = "/terminal";
+const ORIGEM_REFERENCIA = "https://interno.invalid";
+
+/**
+ * Só caminhos internos (evita redirecionamento aberto). O navegador remove tabulação e quebras de linha
+ * e trata "\\" como "/", então "/\t/evil.com" viraria "//evil.com": esses caracteres são recusados e o
+ * resultado é conferido com o parser de URL (mesma origem).
+ */
 export function destinoSeguro(proximo: string | null | undefined): string {
-  if (!proximo || !proximo.startsWith("/") || proximo.startsWith("//") || proximo.startsWith("/\\")) return "/terminal";
-  if (proximo === "/login" || proximo.startsWith("/login?")) return "/terminal";
-  return proximo;
+  if (!proximo || !proximo.startsWith("/")) return PADRAO;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f\\]/.test(proximo)) return PADRAO;
+  let url: URL;
+  try {
+    url = new URL(proximo, ORIGEM_REFERENCIA);
+  } catch {
+    return PADRAO;
+  }
+  if (url.origin !== ORIGEM_REFERENCIA) return PADRAO;
+  if (url.pathname === "/login") return PADRAO;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export function FormLogin({ proximo }: { proximo?: string | null }) {

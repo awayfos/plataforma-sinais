@@ -12,6 +12,9 @@ on:
       - "frontend/**"
       - ".github/workflows/frontend.yml"
 
+permissions:
+  contents: read
+
 concurrency:
   group: frontend-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -21,6 +24,31 @@ defaults:
     working-directory: frontend
 
 jobs:
+  lockfile:
+    # TEMPORÁRIO: gera o package-lock.json com rede e imprime no log (gzip + base64) para versionar.
+    name: Gerar lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sem legacy-peer-deps
+        continue-on-error: true
+        run: |
+          mv .npmrc /tmp/npmrc
+          if npm install --package-lock-only --no-audit --no-fund; then
+            echo "LOCK_ESTRITO"; gzip -9c package-lock.json | base64 -w0; echo
+          else
+            echo "LOCK_ESTRITO_FALHOU"; tail -n 30 ~/.npm/_logs/*-debug-0.log
+          fi
+          mv /tmp/npmrc .npmrc
+          rm -f package-lock.json
+      - name: Com legacy-peer-deps
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          echo "LOCK_LEGADO"; gzip -9c package-lock.json | base64 -w0; echo
+
   verificacao:
     name: Lint e tipos
     runs-on: ubuntu-latest

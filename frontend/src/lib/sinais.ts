@@ -43,6 +43,7 @@ export function estatisticas(historico: SinalHistorico[]): Estatisticas {
   let pendentes = 0;
   let apertados = 0;
   for (const h of historico) {
+    if (h.direcao === "AGUARDAR") continue;
     if (h.resultado === "WIN") win++;
     else if (h.resultado === "LOSS") loss++;
     else if (h.resultado === "TIE") tie++;

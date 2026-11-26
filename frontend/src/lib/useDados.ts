@@ -5,7 +5,7 @@ import { ErroApi, paraErroApi } from "./api/cliente";
 
 interface Estado<T> {
   chave: string | null;
-  versao: number;
+  versao: string;
   dados?: T;
   erro?: ErroApi;
 }
@@ -14,9 +14,11 @@ interface Estado<T> {
  * Busca dados para uma chave (null = não buscar). Sem setState síncrono no efeito:
  * "carregando" é derivado de a resposta guardada ser de outra chave/versão.
  */
-export function useDados<T>(chave: string | null, carregar: (sinal: AbortSignal) => Promise<T>) {
-  const [estado, setEstado] = useState<Estado<T>>({ chave: null, versao: -1 });
-  const [versao, setVersao] = useState(0);
+export function useDados<T>(chave: string | null, carregar: (sinal: AbortSignal) => Promise<T>, revalidar = 0) {
+  const [estado, setEstado] = useState<Estado<T>>({ chave: null, versao: "" });
+  const [versaoLocal, setVersao] = useState(0);
+  // `revalidar` muda de fora (ex.: reconexão): busca de novo mantendo os dados antigos na tela.
+  const versao = `${versaoLocal}:${revalidar}`;
   const carregarRef = useRef(carregar);
 
   useEffect(() => {

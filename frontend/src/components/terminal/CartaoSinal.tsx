@@ -4,6 +4,7 @@ import { api } from "@/lib/api/endpoints";
 import type { Sinal } from "@/lib/api/tipos";
 import { formatarDuracao, formatarHora, formatarPercentual, formatarPreco, periodoAteAgora } from "@/lib/formato";
 import { EXPIRACOES_CURTAS, ROTULO_EXPIRACAO, estadoJanela, estatisticas } from "@/lib/sinais";
+import { MARGEM_JANELA_MS, agoraServidor } from "@/lib/relogio";
 import { useAgora } from "@/lib/useAgora";
 import { useDados } from "@/lib/useDados";
 import { Dica } from "@/components/ui/Dica";
@@ -45,8 +46,13 @@ function HistoricoDoSinal({ simbolo, sinal }: { simbolo: string; sinal: Sinal })
 }
 
 export function CartaoSinal({ sinal, simbolo }: { sinal: Sinal; simbolo: string }) {
-  const agora = useAgora(250, sinal.janela_ate !== null);
-  const janela = estadoJanela(sinal.janela_ate, agora);
+  const agoraLocal = useAgora(250, sinal.janela_ate !== null);
+  // Relógio do servidor (o da máquina pode estar errado) e margem de segurança antes do corte.
+  const janela = estadoJanela(
+    sinal.janela_ate === null ? null : sinal.janela_ate - MARGEM_JANELA_MS,
+    agoraServidor(agoraLocal),
+  );
+  const mostrarProbabilidade = sinal.direcao !== "AGUARDAR" && sinal.probabilidade !== null && sinal.n_validacao !== null;
   const curta = EXPIRACOES_CURTAS.includes(sinal.expiracao);
   const compra = sinal.direcao === "COMPRA";
 
@@ -67,13 +73,13 @@ export function CartaoSinal({ sinal, simbolo }: { sinal: Sinal; simbolo: string 
             <SeloDirecao direcao={sinal.direcao} grande />
             <span className="text-suave">· {ROTULO_EXPIRACAO[sinal.expiracao]}</span>
           </h3>
-          {sinal.probabilidade !== null && (
+          {mostrarProbabilidade && (
             <p className="text-right">
               <span className="num block text-lg leading-none font-semibold text-texto">
-                <span>{formatarPercentual(sinal.probabilidade)}</span>
+                <span>{formatarPercentual(sinal.probabilidade!)}</span>
               </span>
               <span className="num inline-flex items-center text-[11px] text-apagado">
-                <span>calibrada · n = {sinal.n_validacao ?? "—"}</span>
+                <span>calibrada · n = {sinal.n_validacao}</span>
                 <Dica termo="probabilidade" />
               </span>
             </p>

@@ -57,9 +57,9 @@ export function Cabecalho() {
       </nav>
       <div className="ml-auto flex items-center gap-3">
         {estado !== "ocioso" && (
-          <span className="hidden items-center gap-1.5 text-[11px] text-apagado md:inline-flex" role="status" aria-live="polite">
-            <span className={`size-1.5 rounded-full ${status.cor}`} aria-hidden="true" />
-            {status.texto}
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-apagado" role="status" aria-live="polite" title={status.texto}>
+            <span className={`size-2 rounded-full ${status.cor}`} aria-hidden="true" />
+            <span className="sr-only md:not-sr-only">{status.texto}</span>
           </span>
         )}
         <div className="hidden sm:block">

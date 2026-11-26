@@ -29,7 +29,16 @@ export interface OpcoesTempoReal {
   aoMudarStatus?: (s: StatusConexao) => void;
   aoSessaoRevogada?: () => void;
   aoAssinaturaVencida?: () => void;
+  /** Conexão reaberta depois de uma queda: hora de recarregar o que veio por REST. */
+  aoReconectar?: () => void;
+  /**
+   * A cada FALHAS_PARA_CONFERIR quedas seguidas sem uma conexão estável. Um handshake recusado (sessão ou
+   * assinatura inválida) chega ao navegador só como 1006; o chamador confere a sessão por HTTP.
+   */
+  aoFalhasSeguidas?: () => void;
 }
+
+export const FALHAS_PARA_CONFERIR = 3;
 
 export const ATRASO_MINIMO_MS = 500;
 export const ATRASO_MAXIMO_MS = 30_000;
@@ -50,6 +59,7 @@ export class ClienteTempoReal {
   private tentativa = 0;
   private timer: unknown = null;
   private encerrado = false;
+  private jaAbriu = false;
   private _status: StatusConexao = "ocioso";
 
   constructor(private readonly opcoes: OpcoesTempoReal) {}
@@ -115,6 +125,8 @@ export class ClienteTempoReal {
       this.tentativa = 0;
       this.mudarStatus("conectado");
       for (const canal of this.ouvintes.keys()) this.enviar({ acao: "assinar", canal });
+      if (this.jaAbriu) this.opcoes.aoReconectar?.();
+      this.jaAbriu = true;
     };
     s.onmessage = (ev) => {
       if (this.socket !== s) return;
@@ -152,6 +164,7 @@ export class ClienteTempoReal {
     const atraso = atrasoReconexao(this.tentativa, this.opcoes.aleatorio);
     this.tentativa += 1;
     this.mudarStatus("reconectando");
+    if (this.tentativa % FALHAS_PARA_CONFERIR === 0) this.opcoes.aoFalhasSeguidas?.();
     const agendar = this.opcoes.agendar ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
     this.timer = agendar(() => {
       this.timer = null;

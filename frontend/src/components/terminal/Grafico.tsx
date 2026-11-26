@@ -17,17 +17,15 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import type { Candle, Desenho, IndicadoresGrafico } from "@/lib/api/tipos";
-import { numero } from "@/lib/candles";
+import type { Candle, Desenho, IndicadoresGrafico, TempoGrafico } from "@/lib/api/tipos";
+import { TEMPOS_DIARIOS, legendaVisivel, numero, tempoDoGrafico } from "@/lib/candles";
 import { formatarPreco } from "@/lib/formato";
 import { bollinger, ema, macd, rsi, vwap, type Serie } from "@/lib/indicadores";
 import { PrimitivaZonas } from "./primitivaZona";
 
 export type Ferramenta = "cursor" | "linha" | "zona";
 
-/** O Brasil não tem horário de verão desde 2019: o eixo mostra UTC−3 (Brasília). */
-const DESLOCAMENTO_BRASILIA_S = -3 * 3600;
-const paraTempo = (ms: number) => (Math.floor(ms / 1000) + DESLOCAMENTO_BRASILIA_S) as UTCTimestamp;
+const paraTempo = (ms: number, tempo: TempoGrafico) => tempoDoGrafico(ms, tempo) as UTCTimestamp;
 
 const COR = {
   fundo: "#0a0d12",
@@ -64,8 +62,8 @@ interface SeriesIndicadores {
   macdSinal?: ISeriesApi<"Line">;
 }
 
-function preencherIndicadores(s: SeriesIndicadores, candles: Candle[]): void {
-  const tempos = candles.map((k) => paraTempo(k.t));
+function preencherIndicadores(s: SeriesIndicadores, candles: Candle[], tempo: TempoGrafico): void {
+  const tempos = candles.map((k) => paraTempo(k.t, tempo));
   const fechamentos = candles.map((k) => numero(k.c));
   if (s.ema9 && s.ema21) {
     s.ema9.setData(linha(ema(fechamentos, 9), tempos));
@@ -99,6 +97,8 @@ const SEM_ROTULO = { lastValueVisible: false, priceLineVisible: false, crosshair
 
 export function Grafico({
   candles,
+  chave,
+  tempo,
   indicadores,
   paineis,
   desenhos,
@@ -107,6 +107,9 @@ export function Grafico({
   rotulo,
 }: {
   candles: Candle[];
+  /** Identifica a série exibida (ativo:tempo), para não misturar a legenda entre séries. */
+  chave: string;
+  tempo: TempoGrafico;
   indicadores: IndicadoresGrafico;
   /** RSI e MACD em painéis próprios (modo Avançado). */
   paineis: boolean;
@@ -122,16 +125,19 @@ export function Grafico({
   const zonas = useRef<PrimitivaZonas | null>(null);
   const linhas = useRef<IPriceLine[]>([]);
   const ind = useRef<SeriesIndicadores>({ lista: [] });
-  const carregado = useRef<{ primeiro: number; n: number } | null>(null);
+  const carregado = useRef<{ chave: string; primeiro: number; n: number } | null>(null);
   const porTempo = useRef(new Map<number, Candle>());
   const ferramentaRef = useRef(ferramenta);
   const aoCriarRef = useRef(aoCriarDesenho);
   const pendenteRef = useRef<number | null>(null);
   const [pendente, setPendente] = useState<number | null>(null);
-  const [foco, setFoco] = useState<Candle | null>(null);
-  const ultimos = useRef<Candle[]>([]);
+  const [foco, setFoco] = useState<{ chave: string; candle: Candle } | null>(null);
+  const diario = TEMPOS_DIARIOS.includes(tempo);
+  const ultimos = useRef<{ candles: Candle[]; tempo: TempoGrafico }>({ candles: [], tempo: "1m" });
+  const chaveRef = useRef(chave);
 
   useEffect(() => {
+    chaveRef.current = chave;
     ferramentaRef.current = ferramenta;
     aoCriarRef.current = aoCriarDesenho;
     if (ferramenta !== "zona") pendenteRef.current = null;
@@ -198,7 +204,8 @@ export function Grafico({
       }
     };
     const mover = (p: MouseEventParams<Time>) => {
-      setFoco(p.time === undefined ? null : (porTempo.current.get(p.time as number) ?? null));
+      const candle = p.time === undefined ? undefined : porTempo.current.get(p.time as number);
+      setFoco(candle ? { chave: chaveRef.current, candle } : null);
     };
     chart.subscribeClick(clique);
     chart.subscribeCrosshairMove(mover);
@@ -240,7 +247,8 @@ export function Grafico({
       novo.bbMedia = add(chart.addSeries(LineSeries, { color: COR.cinza, lineWidth: 1, lineStyle: LineStyle.Dashed, ...SEM_ROTULO }));
       novo.bbInf = add(chart.addSeries(LineSeries, { color: COR.cinza, lineWidth: 1, ...SEM_ROTULO }));
     }
-    if (indicadores.vwap) {
+    // VWAP ancorado em 00:00 UTC: só faz sentido em tempos intradiários.
+    if (indicadores.vwap && !diario) {
       novo.vwap = add(chart.addSeries(LineSeries, { color: COR.roxo, lineWidth: 1, lineStyle: LineStyle.Dotted, ...SEM_ROTULO, title: "VWAP" }));
     }
     let painel = 1;
@@ -260,8 +268,8 @@ export function Grafico({
     const panes = chart.panes();
     for (let i = 1; i < panes.length; i++) panes[i]?.setHeight(110);
     ind.current = novo;
-    preencherIndicadores(novo, ultimos.current);
-  }, [indicadores.ema, indicadores.bollinger, indicadores.vwap, indicadores.rsi, indicadores.macd, paineis]);
+    preencherIndicadores(novo, ultimos.current.candles, ultimos.current.tempo);
+  }, [indicadores.ema, indicadores.bollinger, indicadores.vwap, indicadores.rsi, indicadores.macd, paineis, diario]);
 
   // Dados: candles, volume e indicadores.
   useEffect(() => {
@@ -269,7 +277,7 @@ export function Grafico({
     const v = velas.current;
     const vol = volume.current;
     if (!chart || !v || !vol) return;
-    const tempos = candles.map((k) => paraTempo(k.t));
+    const tempos = candles.map((k) => paraTempo(k.t, tempo));
     const barras = candles.map((k, i) => ({ time: tempos[i]!, open: numero(k.o), high: numero(k.h), low: numero(k.l), close: numero(k.c) }));
     const volumes = candles.map((k, i) => ({
       time: tempos[i]!,
@@ -281,22 +289,22 @@ export function Grafico({
     const anterior = carregado.current;
     const primeiro = candles[0]?.t ?? -1;
     const incremental =
-      anterior !== null && anterior.primeiro === primeiro && candles.length > 0 && (candles.length === anterior.n || candles.length === anterior.n + 1);
+      anterior !== null && anterior.chave === chave && anterior.primeiro === primeiro && candles.length > 0 && (candles.length === anterior.n || candles.length === anterior.n + 1);
     if (incremental) {
       v.update(barras.at(-1)!);
       vol.update(volumes.at(-1)!);
     } else {
       v.setData(barras);
       vol.setData(volumes);
-      if (anterior?.primeiro !== primeiro && candles.length > 0) {
+      if ((anterior?.chave !== chave || anterior?.primeiro !== primeiro) && candles.length > 0) {
         chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, candles.length - 140), to: candles.length + 4 });
       }
     }
-    carregado.current = { primeiro, n: candles.length };
+    carregado.current = { chave, primeiro, n: candles.length };
 
-    ultimos.current = candles;
-    preencherIndicadores(ind.current, candles);
-  }, [candles]);
+    ultimos.current = { candles, tempo };
+    preencherIndicadores(ind.current, candles, tempo);
+  }, [candles, tempo, chave]);
 
   // Desenhos: linhas horizontais (price lines) e zonas (primitiva).
   useEffect(() => {
@@ -322,7 +330,7 @@ export function Grafico({
     ts.setVisibleLogicalRange({ from: centro - meia, to: centro + meia });
   }
 
-  const vela = foco ?? candles.at(-1) ?? null;
+  const vela = legendaVisivel(foco, chave, candles);
   const subiu = vela ? numero(vela.c) >= numero(vela.o) : true;
 
   return (

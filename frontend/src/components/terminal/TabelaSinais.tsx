@@ -18,7 +18,7 @@ export function TabelaSinais({
 }) {
   if (!sinais) return <Carregando rotulo="Carregando sinais…" linhas={5} />;
   const linhas = ordenarSinais(sinais);
-  const todosAguardar = linhas.every((l) => !l.sinal || l.sinal.direcao === "AGUARDAR");
+  const todosAguardar = linhas.every((l) => l.sinal?.direcao === "AGUARDAR");
 
   return (
     <div>
@@ -46,6 +46,11 @@ export function TabelaSinais({
         <tbody>
           {linhas.map(({ expiracao, sinal }) => {
             const ativo = sinal && sinal.direcao !== "AGUARDAR";
+            // Probabilidade só com direção, valor e tamanho da amostra (nunca solta nem ao lado de AGUARDAR).
+            const probabilidade =
+              sinal !== null && sinal.direcao !== "AGUARDAR" && sinal.probabilidade !== null && sinal.n_validacao !== null
+                ? { valor: sinal.probabilidade, n: sinal.n_validacao }
+                : null;
             return (
               <tr
                 key={expiracao}
@@ -70,11 +75,11 @@ export function TabelaSinais({
                   )}
                 </td>
                 <td className="num py-2 pr-2 text-right text-[13px]">
-                  {sinal?.probabilidade != null ? formatarPercentual(sinal.probabilidade) : <span className="text-apagado">—</span>}
+                  {probabilidade ? formatarPercentual(probabilidade.valor) : <span className="text-apagado">—</span>}
                 </td>
                 <td className="num py-2 text-right text-[12px] text-suave">
-                  {sinal?.probabilidade != null && sinal.n_validacao != null ? (
-                    `n = ${sinal.n_validacao}`
+                  {probabilidade ? (
+                    `n = ${probabilidade.n}`
                   ) : (
                     <span className="text-apagado">—</span>
                   )}

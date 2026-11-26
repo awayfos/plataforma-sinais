@@ -5,7 +5,7 @@ import { api } from "@/lib/api/endpoints";
 import type { Analise, Candle, Desenho, IndicadoresGrafico, Sinal, TempoGrafico } from "@/lib/api/tipos";
 import { mesclarCandle } from "@/lib/candles";
 import { useDados } from "@/lib/useDados";
-import { useCanal } from "@/lib/ws/ProvedorTempoReal";
+import { useCanal, useReconexoes, useStatusTempoReal } from "@/lib/ws/ProvedorTempoReal";
 import { useSessao } from "@/components/sessao/ProvedorSessao";
 import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { tituloPainel } from "@/components/ui/estilos";
@@ -29,6 +29,10 @@ function maisRecente(a: Analise | null | undefined, b: Analise | null | undefine
 export function Terminal() {
   const { usuario, layout, salvarLayout } = useSessao();
   const avancado = usuario?.modo === "avancado";
+  const status = useStatusTempoReal();
+  const reconexoes = useReconexoes();
+  // Sem tempo real, o que está na tela pode estar velho: avisa e esmaece até reconectar e recarregar.
+  const desatualizado = status === "reconectando" || status === "encerrado";
 
   const ativosQ = useDados("ativos", (s) => api.ativos(s));
   const ativos = useMemo(() => ativosQ.dados ?? [], [ativosQ.dados]);
@@ -58,7 +62,11 @@ export function Terminal() {
 
   // Candles: histórico por REST + candle em formação pelo WebSocket.
   const chaveSerie = simbolo ? `${simbolo}:${tempo}` : null;
-  const candlesQ = useDados(chaveSerie, (s) => api.candles({ simbolo: simbolo!, tg: tempo, limite: LIMITE_CANDLES }, s));
+  const candlesQ = useDados(
+    chaveSerie,
+    (s) => api.candles({ simbolo: simbolo!, tg: tempo, limite: LIMITE_CANDLES }, s),
+    reconexoes,
+  );
   const [aoVivo, setAoVivo] = useState<{ chave: string | null; lista: Candle[] }>({ chave: null, lista: [] });
   useCanal(simbolo ? (`candles:${simbolo}:${tempo}` as const) : null, (c) => {
     const candle: Candle = { t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v };
@@ -74,17 +82,20 @@ export function Terminal() {
   }, [candlesQ.dados, aoVivo, chaveSerie]);
 
   // Análise e sinais: REST no início, WebSocket depois.
-  const analiseQ = useDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s));
+  const analiseQ = useDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s), reconexoes);
   const [analiseVivo, setAnaliseVivo] = useState<Analise | null>(null);
   useCanal(simbolo && aberto ? (`analise:${simbolo}` as const) : null, setAnaliseVivo);
   const analise = maisRecente(analiseQ.dados, analiseVivo?.simbolo === simbolo ? analiseVivo : null);
 
-  const sinaisQ = useDados(simbolo && aberto ? `sinais:${simbolo}` : null, (s) => api.sinais(simbolo!, s));
-  const [sinaisVivo, setSinaisVivo] = useState<{ simbolo: string; lista: Sinal[] } | null>(null);
+  const sinaisQ = useDados(simbolo && aberto ? `sinais:${simbolo}` : null, (s) => api.sinais(simbolo!, s), reconexoes);
+  // A lista do WebSocket só vale para o ativo e a conexão em que chegou; depois de trocar de ativo ou
+  // reconectar, o REST recarregado volta a mandar.
+  const [sinaisVivo, setSinaisVivo] = useState<{ simbolo: string; conexao: number; lista: Sinal[] } | null>(null);
   useCanal(simbolo && aberto ? (`sinais:${simbolo}` as const) : null, (lista) => {
-    if (simbolo) setSinaisVivo({ simbolo, lista });
+    if (simbolo) setSinaisVivo({ simbolo, conexao: reconexoes, lista });
   });
-  const sinais = sinaisVivo?.simbolo === simbolo ? sinaisVivo.lista : (sinaisQ.dados ?? null);
+  const sinais =
+    sinaisVivo?.simbolo === simbolo && sinaisVivo.conexao === reconexoes ? sinaisVivo.lista : (sinaisQ.dados ?? null);
   const ativosSinal = useMemo(() => (sinais ?? []).filter((s) => s.direcao !== "AGUARDAR"), [sinais]);
 
   // Alerta sonoro para cada sinal novo (efeito externo, sem estado).
@@ -132,6 +143,10 @@ export function Terminal() {
               ativos={ativos}
               selecionado={simbolo}
               aoSelecionar={(s) => {
+                if (s !== simbolo) {
+                  setSinaisVivo(null);
+                  setAnaliseVivo(null);
+                }
                 setSimboloEscolhido(s);
                 salvar({ simbolo: s });
               }}
@@ -183,6 +198,8 @@ export function Terminal() {
             )}
             <Grafico
               candles={candles}
+              chave={chaveSerie ?? ""}
+              tempo={tempo}
               indicadores={indicadores}
               paineis={avancado}
               desenhos={desenhos}
@@ -195,6 +212,11 @@ export function Terminal() {
       </section>
 
       <aside className="flex min-w-0 flex-col gap-px bg-borda lg:overflow-y-auto" aria-label="Sinais e análise">
+        {desatualizado && (
+          <p role="status" className="bg-alerta/10 px-4 py-2 text-[12px] font-medium text-alerta">
+            Conexão em tempo real perdida. Sinais e análise podem estar desatualizados; reconectando…
+          </p>
+        )}
         <section className="bg-painel px-4 py-3" aria-labelledby="t-sinais">
           <h2 id="t-sinais" className={`${tituloPainel} mb-2`}>
             Sinais por expiração
@@ -206,7 +228,7 @@ export function Terminal() {
           ) : (
             <>
               {ativosSinal.length > 0 && simbolo && (
-                <div className="mb-3 space-y-2">
+                <div className={`mb-3 space-y-2 transition-opacity ${desatualizado ? "pointer-events-none opacity-40" : ""}`} aria-disabled={desatualizado}>
                   {ativosSinal.map((s) => (
                     <CartaoSinal key={`${s.expiracao}:${s.janela_ate}`} sinal={s} simbolo={simbolo} />
                   ))}
@@ -216,7 +238,10 @@ export function Terminal() {
             </>
           )}
         </section>
-        <section className="flex-1 bg-painel" aria-labelledby="t-analise">
+        <section
+          className={`flex-1 bg-painel transition-opacity ${desatualizado ? "opacity-50" : ""}`}
+          aria-labelledby="t-analise"
+        >
           <h2 id="t-analise" className={`${tituloPainel} px-4 pt-3`}>
             Análise
           </h2>

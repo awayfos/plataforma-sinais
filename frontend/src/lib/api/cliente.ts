@@ -1,3 +1,4 @@
+import { registrarHoraServidor } from "../relogio";
 import type { CorpoErro } from "./tipos";
 
 export class ErroApi extends Error {
@@ -66,6 +67,8 @@ export async function requisicao<T>(caminho: string, opcoes: OpcoesRequisicao = 
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ErroApi(0, "rede", "Sem conexão com o servidor. Verifique sua internet e tente de novo.");
   }
+
+  registrarHoraServidor(resposta.headers.get("date"), Date.now());
 
   if (resposta.ok) {
     if (resposta.status === 204) return undefined as T;

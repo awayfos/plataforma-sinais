@@ -1,5 +1,6 @@
 "use client";
 
+import { TEMPOS_DIARIOS } from "@/lib/candles";
 import { TEMPOS_GRAFICOS, type Desenho, type IndicadoresGrafico, type TempoGrafico } from "@/lib/api/tipos";
 import { formatarPreco } from "@/lib/formato";
 import type { TermoGlossario } from "@/lib/glossario";
@@ -86,7 +87,8 @@ export function BarraFerramentas({
         </summary>
         <div className="absolute top-full left-0 z-40 mt-1 w-60 rounded-md border border-borda-forte bg-painel-2 p-2 shadow-2xl shadow-black/60">
           {INDICADORES.map((i) => {
-            const bloqueado = i.painel && !avancado;
+            // VWAP é ancorado em 00:00 UTC: em barras de 1 dia ou mais não tem significado.
+            const bloqueado = (i.painel && !avancado) || (i.chave === "vwap" && TEMPOS_DIARIOS.includes(tempo));
             return (
               <label key={i.chave} className={`flex items-center gap-2 rounded px-2 py-1.5 text-[12px] ${bloqueado ? "text-apagado" : "text-suave hover:bg-painel"}`}>
                 <input
@@ -102,6 +104,7 @@ export function BarraFerramentas({
             );
           })}
           {!avancado && <p className="px-2 pt-1 text-[11px] text-apagado">RSI e MACD ficam disponíveis no modo Avançado.</p>}
+          <p className="px-2 pt-1 text-[11px] text-apagado">VWAP diário, reiniciado às 00:00 UTC (21:00 em Brasília); só em tempos intradiários.</p>
         </div>
       </details>
 

@@ -11,6 +11,8 @@ import { Carregando, ErroEstado, Vazio } from "@/components/ui/Estado";
 import { campoBase, painel, rotulo, tituloPainel } from "@/components/ui/estilos";
 import { TabelaHistorico } from "./TabelaHistorico";
 
+const POR_PAGINA = 50;
+
 const PERIODOS = [
   { dias: 1, rotulo: "Últimas 24 h" },
   { dias: 7, rotulo: "7 dias" },
@@ -22,16 +24,22 @@ export function Historico() {
   const [simbolo, setSimbolo] = useState("");
   const [dias, setDias] = useState(30);
   const [expiracao, setExpiracao] = useState<Expiracao | "">("");
+  const [pagina, setPagina] = useState({ filtro: "", quantos: POR_PAGINA });
 
   const ativos = useDados("ativos", (s) => api.ativos(s));
   const historico = useDados(`historico:${simbolo}:${dias}`, (s) =>
     api.historico({ simbolo: simbolo || undefined, ...periodoAteAgora(dias) }, s),
   );
 
+  // AGUARDAR não é operação: fica fora da lista e das contas.
   const itens = (historico.dados ?? [])
-    .filter((h) => !expiracao || h.expiracao === expiracao)
+    .filter((h) => h.direcao !== "AGUARDAR" && (!expiracao || h.expiracao === expiracao))
     .sort((a, b) => b.gerado_em - a.gerado_em);
   const resumo = estatisticas(itens);
+  // A paginação volta ao início quando qualquer filtro muda.
+  const filtro = `${simbolo}:${dias}:${expiracao}`;
+  const quantos = pagina.filtro === filtro ? pagina.quantos : POR_PAGINA;
+  const visiveis = itens.slice(0, quantos);
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-6">
@@ -109,7 +117,23 @@ export function Historico() {
             estiver aprovada, todas as expirações ficam em AGUARDAR e o histórico fica vazio.
           </Vazio>
         ) : (
-          <TabelaHistorico itens={itens} />
+          <>
+            <TabelaHistorico itens={visiveis} />
+            {itens.length > visiveis.length && (
+              <div className="flex items-center justify-between px-3 py-2 text-xs text-apagado">
+                <span>
+                  Mostrando {visiveis.length} de {itens.length}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-md border border-borda-forte px-3 py-1.5 font-medium text-suave hover:text-texto"
+                  onClick={() => setPagina({ filtro, quantos: quantos + POR_PAGINA })}
+                >
+                  Mostrar mais ({Math.min(POR_PAGINA, itens.length - visiveis.length)})
+                </button>
+              </div>
+            )}
+          </>
         )}
         {resumo.semDado > 0 && (
           <p className="px-3 py-2 text-[11px] text-apagado">{resumo.semDado} sinal(is) sem dado de liquidação, fora das estatísticas.</p>
