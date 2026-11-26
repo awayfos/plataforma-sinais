@@ -61,3 +61,16 @@ def test_camada_b_na_confirmacao_e_declarada_como_pendente() -> None:
     (x,) = consolidar_confirmacao([r], 0.86)
     assert x.status == "pendente (camada B)"
     assert np.isnan(x.taxa)
+
+
+def test_markdown_da_confirmacao_mostra_status_e_sinais() -> None:
+    from sinais.situacoes.confirmacao import markdown_confirmacao
+
+    m1, precos = _dados()
+    cand = [{"ativo": "BTCUSDT", "variacao": "S2", "espelho": e, "expiracao": "15m",
+             "camada": "A"} for e in ("topo", "fundo")]  # fmt: skip
+    r = avaliar_confirmacao("BTCUSDT", m1, precos, cand, REGRAS, T0 + 12 * H)
+    texto = markdown_confirmacao(consolidar_confirmacao([r], 0.86), [r], ["2026-11"])
+    assert "| BTCUSDT | S2 | topo | 15m | A |" in texto
+    assert "· BTCUSDT · 15 min |" in texto
+    assert "em andamento" in texto
