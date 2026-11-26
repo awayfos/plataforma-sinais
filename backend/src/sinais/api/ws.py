@@ -17,7 +17,13 @@ from fastapi import WebSocket, WebSocketDisconnect
 from sinais.api.dependencias import COOKIE_SESSAO
 from sinais.api.servicos import Servicos
 from sinais.api.sinais_ao_vivo import EXPIRACOES, sinais_para
-from sinais.api.ws_canais import Distribuidor, ErroMensagem, interpretar, origem_permitida
+from sinais.api.ws_canais import (
+    Distribuidor,
+    ErroMensagem,
+    de_proxy_confiavel,
+    interpretar,
+    origem_permitida,
+)
 from sinais.contas.autorizacao import expiracoes_permitidas, pode_ver_ativo
 from sinais.contas.contexto import Contexto
 from sinais.contas.servico import ErroConta
@@ -131,9 +137,23 @@ class ConexaoWs:
     async def _verificar(self) -> None:
         while True:
             await asyncio.sleep(self._s.ws_verificacao_s)
-            await self._validar()
+            ctx = await self._validar()
             if self._vencida():
                 raise _Fechar(FECHA_ASSINATURA)
+            # O plano pode ter mudado: canais de ativo que saiu do plano são cancelados.
+            for canal in sorted(self._assinante.canais):
+                simbolo = canal.split(":")[1]
+                if not pode_ver_ativo(ctx, simbolo):
+                    self._s.distribuidor.cancelar(self._assinante, canal)
+                    self._enfileirar(
+                        {
+                            "canal": canal,
+                            "erro": {
+                                "codigo": "ativo_nao_incluido",
+                                "mensagem": "Este ativo não está mais incluído no seu plano.",
+                            },
+                        }
+                    )
 
     async def executar(self) -> None:
         codigo: int | None = 1000
@@ -173,8 +193,12 @@ class ConexaoWs:
 
 async def rota_ws(websocket: WebSocket) -> None:
     s: Servicos = websocket.app.state.servicos
+    conexao = websocket.client.host if websocket.client else None
     if not origem_permitida(
-        websocket.headers.get("origin"), websocket.headers.get("host"), s.origens_permitidas
+        websocket.headers.get("origin"),
+        s.origens_permitidas,
+        websocket.headers.get("x-forwarded-host"),
+        de_proxy_confiavel(conexao, s.proxies_confiaveis),
     ):
         await websocket.close(code=FECHA_ORIGEM)
         return

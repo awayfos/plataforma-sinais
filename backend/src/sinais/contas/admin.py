@@ -26,9 +26,10 @@ from sinais.contas.modelos import (
 )
 from sinais.contas.repositorio import ErroEmailDuplicado
 from sinais.contas.servico import ErroConta, ServicoContas, normalizar_email, validar_senha_nova
+from sinais.core.dominio import ROTULOS_EXPIRACAO
 from sinais.core.tempo import InstanteMs
 
-EXPIRACOES = ("1m", "5m", "15m", "30m", "60m")
+EXPIRACOES = tuple(ROTULOS_EXPIRACAO.values())
 CORRETORA_EXNOVA = "exnova"
 _DIA_MS = 86_400_000
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

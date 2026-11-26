@@ -47,8 +47,10 @@ services:
       SINAIS_COOKIE_SEGURO: ${SINAIS_COOKIE_SEGURO:-true}
       SINAIS_SESSOES_SIMULTANEAS: ${SINAIS_SESSOES_SIMULTANEAS:-1}
       SINAIS_REGISTRO_MODELOS: ${SINAIS_REGISTRO_MODELOS:-/app/registro}
-      SINAIS_ORIGENS_PERMITIDAS: ${SINAIS_ORIGENS_PERMITIDAS:-}
-      SINAIS_CONFIAR_PROXY: ${SINAIS_CONFIAR_PROXY:-false}
+      # Origens aceitas no WebSocket (obrigatória com SINAIS_AMBIENTE=prod).
+      SINAIS_ORIGENS_PERMITIDAS: ${SINAIS_ORIGENS_PERMITIDAS:-http://localhost:3000}
+      # CIDRs dos proxies (Next, nginx) cujo X-Forwarded-For é lido.
+      SINAIS_PROXIES_CONFIAVEIS: ${SINAIS_PROXIES_CONFIAVEIS:-}
     depends_on:
       db:
         condition: service_healthy
@@ -92,6 +94,9 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      # Registro de modelos (campeões); só leitura para a API.
+      - registro_modelos:/app/registro:ro
     command: ["python", "-m", "sinais.processos.api"]
     healthcheck:
       test:
@@ -106,3 +111,4 @@ services:
 
 volumes:
   dados_db:
+  registro_modelos:

@@ -26,6 +26,7 @@ from sinais.contas.modelos import (
     Usuario,
 )
 from sinais.contas.repositorio import CAMPOS_USUARIO, ErroEmailDuplicado
+from sinais.core.dominio import EXPIRACAO_POR_ROTULO
 from sinais.core.tempo import InstanteMs, de_datetime, para_datetime
 from sinais.persistencia.tabelas_contas import (
     assinaturas,
@@ -40,7 +41,7 @@ from sinais.persistencia.tabelas_contas import (
     usuarios,
 )
 
-EXPIRACAO_S = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "60m": 3600}
+EXPIRACAO_S = {r: int(e) for r, e in EXPIRACAO_POR_ROTULO.items()}
 ROTULO_EXPIRACAO = {v: k for k, v in EXPIRACAO_S.items()}
 
 
@@ -335,7 +336,7 @@ class RepositorioContasPg:
         mais_novas = (
             select(sessoes.c.token_hash)
             .where(sessoes.c.usuario_id == usuario_id, sessoes.c.revogada_em.is_(None))
-            .order_by(sessoes.c.criada_em.desc(), sessoes.c.token_hash.desc())
+            .order_by(sessoes.c.criada_em.desc(), sessoes.c.seq.desc())
             .limit(manter)
         )
         async with self._engine.begin() as conn:

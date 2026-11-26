@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sinais.api.sinais_ao_vivo import BuscaCampeao
-from sinais.api.ws_canais import Distribuidor
+from sinais.api.ws_canais import Distribuidor, RedeIp
 from sinais.contas.admin import ServicoAdmin
 from sinais.contas.servico import ServicoContas
 from sinais.core.dominio import ATIVOS_V1, Ativo
@@ -30,7 +30,7 @@ class Servicos:
     cookie_seguro: bool = True
     ws_verificacao_s: float = 5.0
     origens_permitidas: tuple[str, ...] = ()
-    confiar_proxy: bool = False
+    proxies_confiaveis: tuple[RedeIp, ...] = ()
     documentacao: bool = False
     ativos: tuple[Ativo, ...] = ATIVOS_V1
     distribuidor: Distribuidor = field(default_factory=Distribuidor)

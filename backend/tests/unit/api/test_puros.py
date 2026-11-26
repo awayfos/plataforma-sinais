@@ -139,14 +139,20 @@ def test_interpretar_recusa_mensagens_invalidas(texto: str) -> None:
         interpretar(texto, ("BTCUSDT", "ETHUSDT"))
 
 
-def test_origem_permitida() -> None:
-    assert origem_permitida(None, "api:8000", ())
-    assert origem_permitida("https://app.exemplo.com", "app.exemplo.com", ())
+def test_origem_permitida_so_pela_lista_ou_host_encaminhado_de_proxy_confiavel() -> None:
+    lista = ("http://localhost:3000",)
+    assert origem_permitida(None, lista)  # cliente que não é navegador: o cookie decide
+    assert origem_permitida("http://localhost:3000", lista)
+    assert not origem_permitida("https://malicioso.com", lista)
+    assert not origem_permitida("null", lista)
+    # Host igual não basta mais: atrás do proxy o Host é interno
+    assert not origem_permitida("https://app.exemplo.com", ())
     assert origem_permitida(
-        "https://painel.exemplo.com", "api:8000", ("https://painel.exemplo.com",)
+        "https://app.exemplo.com", (), host_encaminhado="app.exemplo.com", proxy_confiavel=True
     )
-    assert not origem_permitida("https://malicioso.com", "app.exemplo.com", ())
-    assert not origem_permitida("null", "app.exemplo.com", ())
+    assert not origem_permitida(
+        "https://app.exemplo.com", (), host_encaminhado="app.exemplo.com", proxy_confiavel=False
+    )
 
 
 def test_distribuidor_entrega_por_canal_e_descarta_o_mais_antigo() -> None:
@@ -202,58 +208,83 @@ def test_traduzir_candle_fechado_e_analise() -> None:
     assert canais[0][1]["t"] == 1
 
 
-def test_ip_do_cliente_usa_a_ultima_entrada_do_proxy_confiavel() -> None:
+def test_ip_do_cliente_anda_no_x_forwarded_for_da_direita_pulando_proxies_confiaveis() -> None:
+    from ipaddress import ip_network
+
     from sinais.api.ws_canais import ip_do_cliente
 
-    assert ip_do_cliente("10.0.0.5", None, confiar_proxy=False) == "10.0.0.5"
-    assert ip_do_cliente("10.0.0.5", "6.6.6.6", confiar_proxy=False) == "10.0.0.5"
-    # o cliente pode forjar o início da lista; o proxy acrescenta o IP real no fim
-    assert ip_do_cliente("10.0.0.5", "6.6.6.6, 203.0.113.9", confiar_proxy=True) == "203.0.113.9"
-    assert ip_do_cliente("10.0.0.5", " ", confiar_proxy=True) == "10.0.0.5"
-    assert ip_do_cliente(None, None, confiar_proxy=True) == "desconhecido"
-    assert len(ip_do_cliente("x" * 100, None, confiar_proxy=False)) == 64
+    proxies = (ip_network("127.0.0.1/32"), ip_network("172.16.0.0/12"))
+    # conexão direta de fora: XFF é ignorado (pode ser forjado)
+    assert ip_do_cliente("203.0.113.9", "1.1.1.1", proxies) == "203.0.113.9"
+    # Next (172.18.0.3) → nginx (127.0.0.1) → API: o primeiro de fora, vindo da direita
+    xff = "6.6.6.6, 198.51.100.7, 172.18.0.3"
+    assert ip_do_cliente("127.0.0.1", xff, proxies) == "198.51.100.7"
+    assert ip_do_cliente("127.0.0.1", None, proxies) == "127.0.0.1"
+    assert ip_do_cliente("127.0.0.1", "172.18.0.3", proxies) == "172.18.0.3"
+    assert ip_do_cliente("127.0.0.1", "lixo, 172.18.0.3", proxies) == "lixo"
+    assert ip_do_cliente(None, None, proxies) == "desconhecido"
+    assert ip_do_cliente("10.0.0.5", "6.6.6.6", ()) == "10.0.0.5"
+    assert len(ip_do_cliente("x" * 100, None, ())) == 64
 
 
-def test_acesso_auditoria_qualidade_com_campos_do_frontend() -> None:
-    from sinais.api.visoes import acesso_saida, auditoria_saida, qualidade_saida
-    from sinais.contas.modelos import RegistroAcesso, RegistroAuditoria
+def test_campeao_malformado_cai_para_aguardar(tmp_path: object) -> None:
+    from pathlib import Path
 
-    a = acesso_saida(RegistroAcesso(5, 1, "login", "1.2.3.4", "ua", T0), "a@b.com")
-    assert a.model_dump() == {
-        "id": 5,
-        "usuario_id": 1,
-        "email": "a@b.com",
-        "evento": "login",
-        "ip": "1.2.3.4",
-        "user_agent": "ua",
-        "t": T0,
-        "ts": T0,
-    }
-    r = auditoria_saida(
-        RegistroAuditoria(7, 2, "plano.criar", "plano:1", None, {"x": 1}, T0), "adm@b.com"
-    )
-    assert r.model_dump() == {
-        "id": 7,
-        "admin_id": 2,
-        "admin_email": "adm@b.com",
-        "acao": "plano.criar",
-        "alvo": "plano:1",
-        "antes": None,
-        "depois": {"x": 1},
-        "t": T0,
-        "ts": T0,
-    }
-    q = qualidade_saida(("BTCUSDT", "1m", T0, T0 + 60_000, "lacuna"))
-    assert q.model_dump() == {
-        "simbolo": "BTCUSDT",
-        "intervalo": "1m",
-        "inicio": T0,
-        "fim": T0 + 60_000,
-        "tipo": "lacuna",
-        "detalhes": None,
-    }
+    from sinais.api.sinais_ao_vivo import campeao_do_registro
+
+    pasta = Path(str(tmp_path))
+    for simbolo, conteudo in (("BTCUSDT", "[1, 2]"), ("ETHUSDT", "{nao e json")):
+        d = pasta / simbolo / "1m"
+        d.mkdir(parents=True)
+        (d / "campeao.json").write_text(conteudo)
+    (pasta / "BTCUSDT" / "5m").mkdir(parents=True)
+    (pasta / "BTCUSDT" / "5m" / "campeao.json").write_text('{"versao": "v3"}')
+    busca = campeao_do_registro(str(pasta))
+    assert busca("BTCUSDT", "1m") is None
+    assert busca("ETHUSDT", "1m") is None
+    assert busca("BTCUSDT", "5m") == "v3"
+    assert busca("BTCUSDT", "15m") is None
 
 
-def test_sinal_tem_tolerancia_e_preco_de_referencia_nulos_em_aguardar() -> None:
-    s = sinais_para("BTCUSDT", ("1m",), lambda s, e: None)[0].model_dump()
-    assert s["tolerancia_preco"] is None and s["preco_referencia"] is None
+def test_supervisor_reinicia_a_fonte_de_eventos_que_morre() -> None:
+    from sinais.api.supervisao import supervisionar
+
+    chamadas: list[int] = []
+
+    async def fonte() -> None:
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise RuntimeError("redis caiu")
+        if len(chamadas) == 2:
+            return  # terminou sem erro: também reinicia
+        await asyncio.sleep(3600)
+
+    async def caso() -> None:
+        tarefa = asyncio.create_task(supervisionar("fonte", fonte, espera_s=0))
+        for _ in range(50):
+            await asyncio.sleep(0)
+        tarefa.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await tarefa
+
+    asyncio.run(caso())
+    assert len(chamadas) == 3
+
+
+def test_entrada_ruim_no_stream_nao_derruba_as_outras() -> None:
+    from sinais.api.eventos_redis import distribuir_resposta
+
+    d = Distribuidor()
+    a = d.novo_assinante()
+    d.assinar(a, "candles:BTCUSDT:1m")
+    boa = evento_candle_fechado(vela())
+    resposta = [
+        (
+            "candle.fechado",
+            [("1-0", {"lixo": "x"}), ("2-0", dict(boa, o="nao-numero")), ("3-0", boa)],
+        )
+    ]
+    ultimos = {"candle.fechado": "$"}
+    assert distribuir_resposta(resposta, ultimos, d, None) == 1
+    assert ultimos["candle.fechado"] == "3-0"
+    assert a.fila.qsize() == 1

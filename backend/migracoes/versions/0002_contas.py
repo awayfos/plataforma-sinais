@@ -55,6 +55,8 @@ def upgrade() -> None:
     op.create_table(
         "sessoes",
         sa.Column("token_hash", sa.String(64), primary_key=True),
+        # Ordem de gravação: desempata sessões criadas no mesmo milissegundo.
+        sa.Column("seq", sa.BigInteger, sa.Identity(), nullable=False, unique=True),
         sa.Column("csrf_hash", sa.String(64), nullable=False),
         sa.Column(
             "usuario_id",
@@ -71,6 +73,7 @@ def upgrade() -> None:
         sa.Column("revogada_em", TS, nullable=True),
         sa.Column("motivo_revogacao", sa.String(32), nullable=True),
     )
+    op.create_index("ix_sessoes_expira_em", "sessoes", ["expira_em"])
     op.create_table(
         "planos",
         sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
@@ -92,7 +95,12 @@ def upgrade() -> None:
             sa.ForeignKey("usuarios.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("plano_id", sa.BigInteger, sa.ForeignKey("planos.id"), nullable=False),
+        sa.Column(
+            "plano_id",
+            sa.BigInteger,
+            sa.ForeignKey("planos.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
         sa.Column("inicio", TS, nullable=False),
         sa.Column("fim", TS, nullable=False),
         sa.Column("origem", sa.String(16), nullable=False, server_default="manual"),
@@ -103,7 +111,12 @@ def upgrade() -> None:
     op.create_table(
         "pagamentos",
         sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
-        sa.Column("assinatura_id", sa.BigInteger, sa.ForeignKey("assinaturas.id"), nullable=False),
+        sa.Column(
+            "assinatura_id",
+            sa.BigInteger,
+            sa.ForeignKey("assinaturas.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("valor_centavos", sa.Integer, nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("referencia_externa", sa.String(128), nullable=True),
@@ -128,7 +141,13 @@ def upgrade() -> None:
     op.create_table(
         "auditoria",
         sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
-        sa.Column("admin_id", sa.BigInteger, sa.ForeignKey("usuarios.id"), nullable=False),
+        # RESTRICT: um admin com ações auditadas não pode ser apagado (só desativado).
+        sa.Column(
+            "admin_id",
+            sa.BigInteger,
+            sa.ForeignKey("usuarios.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
         sa.Column("acao", sa.String(64), nullable=False),
         sa.Column("alvo", sa.String(64), nullable=False),
         sa.Column("antes", JSONB, nullable=True),
@@ -144,7 +163,12 @@ def upgrade() -> None:
     op.create_table(
         "corretora_ativos",
         sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
-        sa.Column("corretora_id", sa.BigInteger, sa.ForeignKey("corretoras.id"), nullable=False),
+        sa.Column(
+            "corretora_id",
+            sa.BigInteger,
+            sa.ForeignKey("corretoras.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("simbolo", sa.String(32), nullable=False),
         sa.Column("simbolo_corretora", sa.String(64), nullable=False),
         sa.Column("expiracoes_s", JSONB, nullable=False),
@@ -158,7 +182,7 @@ def upgrade() -> None:
         sa.Column(
             "corretora_ativo_id",
             sa.BigInteger,
-            sa.ForeignKey("corretora_ativos.id"),
+            sa.ForeignKey("corretora_ativos.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("expiracao_s", sa.Integer, nullable=False),
@@ -168,6 +192,16 @@ def upgrade() -> None:
         sa.Column("valido_de", TS, nullable=False),
         sa.Column("valido_ate", TS, nullable=True),
         sa.CheckConstraint("payout > 0 AND payout <= 1", name="ck_payout_faixa"),
+        sa.CheckConstraint("expiracao_s IN (60, 300, 900, 1800, 3600)", name="ck_payout_expiracao"),
+        sa.CheckConstraint(
+            "valido_ate IS NULL OR valido_ate >= valido_de", name="ck_payout_vigencia"
+        ),
+    )
+    # No máximo um payout vigente por ativo, expiração e faixa horária.
+    op.execute(
+        "CREATE UNIQUE INDEX uq_corretora_payouts_vigente ON corretora_payouts "
+        "(corretora_ativo_id, expiracao_s, coalesce(hora_inicio, '00:00'), "
+        "coalesce(hora_fim, '00:00')) WHERE valido_ate IS NULL"
     )
     op.create_index(
         "ix_corretora_payouts_vigencia",

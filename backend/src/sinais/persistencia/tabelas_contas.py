@@ -49,6 +49,7 @@ sessoes = Table(
     "sessoes",
     metadados,
     Column("token_hash", String(64), primary_key=True),
+    Column("seq", BigInteger, Identity(), nullable=False),
     Column("csrf_hash", String(64), nullable=False),
     Column("usuario_id", BigInteger, ForeignKey("usuarios.id"), nullable=False),
     Column("criada_em", TS, nullable=False),

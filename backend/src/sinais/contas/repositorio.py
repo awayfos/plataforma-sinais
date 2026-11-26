@@ -85,8 +85,9 @@ class RepositorioContas(Protocol):
     async def revogar_excedentes(
         self, usuario_id: int, manter: int, agora: InstanteMs, motivo: str
     ) -> int:
-        """Revoga as sessões ativas além das ``manter`` mais novas (por criação e hash, ordem
-        determinística: dois logins simultâneos chegam ao mesmo resultado)."""
+        """Revoga as sessões ativas além das ``manter`` mais novas (por criação e ordem de
+        gravação, determinística: dois logins simultâneos chegam ao mesmo resultado e a sessão
+        recém-criada nunca perde para uma mais antiga no mesmo milissegundo)."""
         ...
 
     async def sessoes_ativas(self, usuario_id: int, agora: InstanteMs) -> list[Sessao]:

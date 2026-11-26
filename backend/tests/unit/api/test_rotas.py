@@ -310,3 +310,42 @@ def test_admin_encerra_assinatura_e_o_cliente_perde_o_acesso_na_hora() -> None:
     assert ana.get("/api/ativos").status_code == 402
     assert adm.post("/api/admin/assinaturas/9999/encerrar", headers=csrf(adm)).status_code == 404
     assert adm.get("/api/admin/auditoria").json()[0]["acao"] == "assinatura.encerrar"
+
+
+def test_erro_500_no_formato_e_com_cabecalhos_de_seguranca() -> None:
+    from fastapi.testclient import TestClient
+
+    from sinais.api.app import criar_app
+
+    app = preparar()
+
+    class Quebrada:
+        async def candles(self, *args: object) -> list[object]:
+            raise RuntimeError("banco fora")
+
+        async def qualidade_recentes(self, limite: int) -> list[object]:
+            raise RuntimeError("banco fora")
+
+    app.servicos.mercado = Quebrada()  # type: ignore[assignment]
+    c = TestClient(
+        criar_app(app.servicos), base_url="https://testserver", raise_server_exceptions=False
+    )
+    entrar(c, "ana@exemplo.com", SENHA)
+    r = c.get("/api/candles?simbolo=BTCUSDT")
+    assert r.status_code == 500 and erro_de(r)["codigo"] == "erro_interno"
+    assert "banco fora" not in r.text
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert "default-src 'none'" in r.headers["content-security-policy"]
+    assert r.headers["cache-control"] == "no-store"
+
+
+def test_json_aninhado_demais_da_422() -> None:
+    c = preparar().cliente()
+    entrar(c, "ana@exemplo.com", SENHA)
+    corpo = '{"layout": ' + '{"a": ' * 20000 + "1" + "}" * 20000 + "}"
+    r = c.patch(
+        "/api/eu/preferencias",
+        content=corpo,
+        headers={**csrf(c), "content-type": "application/json"},
+    )
+    assert r.status_code == 422 and erro_de(r)["codigo"] in ("validacao", "layout_invalido")

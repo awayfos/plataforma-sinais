@@ -1,16 +1,18 @@
 """Consultas de leitura para a API: candles do gráfico e eventos de qualidade recentes.
 
-Tempos gráficos maiores que 1m são agregados a partir de ``candles_1m`` só com blocos
-completos (mesma regra de ``sinais.dados.agregacao``): um bloco completo já fechou.
+Tempos gráficos maiores que 1m são agregados a partir de ``candles_1m`` com os minutos que
+existem no período, e só períodos já fechados (fim <= agora). Uma lacuna na coleta não some
+com o candle de 1d ou 1w inteiro: ele é montado com o que há (como faz a Binance). A conferência
+contra os klines oficiais continua em ``sinais.dados.conferencia``.
 """
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Protocol
 
 from sinais.core.dominio import TempoGrafico, abertura_candle
 from sinais.core.tempo import InstanteMs, de_datetime, para_datetime
-from sinais.dados.agregacao import agregar
 from sinais.dados.modelos import Candle, IntervaloColeta
 from sinais.persistencia.memoria import RepositorioCandlesMemoria
 from sinais.persistencia.repositorio import EventoQualidade
@@ -30,7 +32,7 @@ _INTERVALOS_SQL = {
 
 class ConsultasMercado(Protocol):
     async def candles(
-        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int
+        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int, agora: InstanteMs
     ) -> list[Candle]:
         """Candles fechados com abertura ``< ate``, em ordem crescente, no máximo ``limite``.
 
@@ -44,9 +46,27 @@ class ConsultasMercado(Protocol):
         ...
 
 
-def _limite_superior(ate: InstanteMs, tg: TempoGrafico) -> InstanteMs:
-    """Fim (exclusivo) do último bloco com abertura ``< ate``."""
-    return abertura_candle(max(ate - 1, 0), tg) + tg.duracao_ms
+def _limite_superior(ate: InstanteMs, tg: TempoGrafico, agora: InstanteMs) -> InstanteMs:
+    """Fim (exclusivo) dos minutos usados: blocos com abertura ``< ate`` e já fechados."""
+    fim = abertura_candle(max(ate - 1, 0), tg) + tg.duracao_ms
+    return min(fim, abertura_candle(agora, tg))
+
+
+def _somar(bloco: list[Candle], tg: TempoGrafico, abertura: InstanteMs) -> Candle:
+    return Candle(
+        simbolo=bloco[0].simbolo,
+        intervalo_ms=tg.duracao_ms,
+        abertura=abertura,
+        abertura_preco=bloco[0].abertura_preco,
+        maxima=max(c.maxima for c in bloco),
+        minima=min(c.minima for c in bloco),
+        fechamento=bloco[-1].fechamento,
+        volume=sum((c.volume for c in bloco), start=Decimal(0)),
+        volume_cotacao=sum((c.volume_cotacao for c in bloco), start=Decimal(0)),
+        negocios=sum(c.negocios for c in bloco),
+        volume_compra_agressora=sum((c.volume_compra_agressora for c in bloco), start=Decimal(0)),
+        fonte="agregado",
+    )
 
 
 class ConsultasMercadoMemoria:
@@ -54,18 +74,21 @@ class ConsultasMercadoMemoria:
         self._repo = repo
 
     async def candles(
-        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int
+        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int, agora: InstanteMs
     ) -> list[Candle]:
-        anteriores = await self._repo.listar(
-            simbolo, IntervaloColeta.M1, 0, _limite_superior(ate, tg)
-        )
+        # Em 1m todo candle gravado já fechou; nos maiores, só períodos com fim <= agora.
+        fim_dados = ate if tg is TempoGrafico.M1 else _limite_superior(ate, tg, agora)
+        anteriores = await self._repo.listar(simbolo, IntervaloColeta.M1, 0, fim_dados)
         if not anteriores:
             return []
         fim = abertura_candle(anteriores[-1].abertura, tg) + tg.duracao_ms
         inicio = max(0, fim - limite * tg.duracao_ms)
         velas = [c for c in anteriores if c.abertura >= inicio]
         if tg is not TempoGrafico.M1:
-            velas = agregar(velas, tg)
+            blocos: dict[int, list[Candle]] = {}
+            for c in velas:
+                blocos.setdefault(abertura_candle(c.abertura, tg), []).append(c)
+            velas = [_somar(b, tg, ab) for ab, b in sorted(blocos.items())]
         return [c for c in velas if c.abertura < ate][-limite:]
 
     async def qualidade_recentes(self, limite: int) -> list[EventoQualidade]:
@@ -77,7 +100,7 @@ class ConsultasMercadoPg:  # pragma: no cover - testado na integração
         self._engine = engine
 
     async def candles(
-        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int
+        self, simbolo: str, tg: TempoGrafico, ate: InstanteMs, limite: int, agora: InstanteMs
     ) -> list[Candle]:
         from sqlalchemy import func, select, text
 
@@ -100,7 +123,7 @@ class ConsultasMercadoPg:  # pragma: no cover - testado na integração
             ultima = await conn.scalar(
                 select(func.max(t.c.abertura)).where(
                     t.c.simbolo == simbolo,
-                    t.c.abertura < para_datetime(_limite_superior(ate, tg)),
+                    t.c.abertura < para_datetime(_limite_superior(ate, tg, agora)),
                 )
             )
         if ultima is None:
@@ -123,7 +146,6 @@ class ConsultasMercadoPg:  # pragma: no cover - testado na integração
             FROM candles_1m
             WHERE simbolo = :simbolo AND abertura >= :inicio AND abertura < :fim
             GROUP BY 1
-            HAVING count(*) = :minutos
             ORDER BY 1 DESC
             LIMIT :limite
             """  # noqa: S608 - o intervalo vem de um dicionário fixo, nunca da requisição
@@ -132,7 +154,6 @@ class ConsultasMercadoPg:  # pragma: no cover - testado na integração
             "simbolo": simbolo,
             "inicio": para_datetime(inicio),
             "fim": para_datetime(fim),
-            "minutos": tg.duracao_ms // _M,
             "limite": limite,
         }
         async with self._engine.connect() as conn:

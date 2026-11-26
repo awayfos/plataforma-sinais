@@ -238,6 +238,11 @@ def revogar_excedentes_mantem_as_mais_novas(fabrica: Fabrica) -> None:
         assert await repo.revogar_excedentes(u.id, 1, T0 + 10, "limite_sessoes") == 2
         assert [s.token_hash for s in await repo.sessoes_ativas(u.id, T0 + 10)] == ["c"]
         assert await repo.revogar_excedentes(u.id, 1, T0 + 11, "limite_sessoes") == 0
+        # no mesmo milissegundo, a gravada por último fica (hashes em ordem inversa)
+        await repo.criar_sessao(sessao(u.id, "z", T0 + 20))
+        await repo.criar_sessao(sessao(u.id, "y", T0 + 20))
+        await repo.revogar_excedentes(u.id, 1, T0 + 21, "limite_sessoes")
+        assert [s.token_hash for s in await repo.sessoes_ativas(u.id, T0 + 21)] == ["y"]
 
     asyncio.run(caso())
 

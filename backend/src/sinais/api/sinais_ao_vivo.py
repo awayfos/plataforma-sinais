@@ -9,10 +9,15 @@ saiu do motor validado.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from typing import cast
 
 from sinais.api.esquemas import ExpiracaoRotulo, Sinal
+from sinais.core.dominio import ROTULOS_EXPIRACAO
+from sinais.logs import obter_logger
 
-EXPIRACOES: tuple[ExpiracaoRotulo, ...] = ("1m", "5m", "15m", "30m", "60m")
+_log = obter_logger(__name__)
+
+EXPIRACOES = cast(tuple[ExpiracaoRotulo, ...], tuple(ROTULOS_EXPIRACAO.values()))
 MOTIVO_SEM_MODELO = "Nenhum modelo validado para esta expiração"
 MOTIVO_SEM_MOTOR = "Modelo validado, mas o motor de sinais ao vivo ainda não está ativo"
 
@@ -47,11 +52,25 @@ def campeao_do_registro(pasta: str) -> BuscaCampeao:
     registro = Registro(pasta)
 
     def buscar(simbolo: str, expiracao: str) -> str | None:
+        # Qualquer defeito no registro (arquivo ilegível, JSON quebrado ou fora do formato)
+        # cai para AGUARDAR: nunca um sinal por engano, nunca um 500.
         try:
             dados = registro.campeao(simbolo, expiracao)
-        except (OSError, ValueError):
+            versao = dados.get("versao") if isinstance(dados, dict) else None
+            if dados is not None and not versao:
+                raise ValueError("campeao.json sem versão")
+        except Exception as erro:
+            _log.error(
+                "sinais.campeao_invalido",
+                extra={
+                    "campos": {
+                        "simbolo": simbolo,
+                        "expiracao": expiracao,
+                        "erro": type(erro).__name__,
+                    }
+                },
+            )
             return None
-        versao = dados.get("versao") if dados else None
         return str(versao) if versao else None
 
     return buscar

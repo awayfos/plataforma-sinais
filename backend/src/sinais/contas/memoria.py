@@ -21,9 +21,10 @@ from sinais.contas.modelos import (
     Usuario,
 )
 from sinais.contas.repositorio import CAMPOS_USUARIO, ErroEmailDuplicado
+from sinais.core.dominio import EXPIRACAO_POR_ROTULO
 from sinais.core.tempo import InstanteMs
 
-_ORDEM_EXPIRACAO = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "60m": 60}
+_ORDEM_EXPIRACAO = {r: int(e) for r, e in EXPIRACAO_POR_ROTULO.items()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,7 @@ class RepositorioContasMemoria:
     def __init__(self) -> None:
         self._usuarios: dict[int, Usuario] = {}
         self._sessoes: dict[str, Sessao] = {}
+        self._ordem_sessao: dict[str, int] = {}
         self._planos: dict[int, Plano] = {}
         self._assinaturas: list[Assinatura] = []
         self._acessos: list[RegistroAcesso] = []
@@ -127,6 +129,7 @@ class RepositorioContasMemoria:
 
     async def criar_sessao(self, sessao: Sessao) -> None:
         self._sessoes[sessao.token_hash] = sessao
+        self._ordem_sessao[sessao.token_hash] = self._id()
 
     async def sessao(self, token_hash: str) -> Sessao | None:
         return self._sessoes.get(token_hash)
@@ -156,7 +159,7 @@ class RepositorioContasMemoria:
             for s in self._sessoes.values()
             if s.usuario_id == usuario_id and s.revogada_em is None
         ]
-        ativas.sort(key=lambda s: (s.criada_em, s.token_hash), reverse=True)
+        ativas.sort(key=lambda s: (s.criada_em, self._ordem_sessao[s.token_hash]), reverse=True)
         for s in ativas[manter:]:
             self._sessoes[s.token_hash] = replace(s, revogada_em=agora, motivo_revogacao=motivo)
         return len(ativas[manter:])

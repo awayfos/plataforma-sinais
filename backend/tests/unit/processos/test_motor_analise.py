@@ -274,3 +274,91 @@ def test_decimal_texto_sem_zeros_e_sem_expoente() -> None:
     assert decimal_texto(Decimal("30000.000000000000")) == "30000"
     assert decimal_texto(Decimal("0E-12")) == "0"
     assert decimal_texto(Decimal("0.000012340000")) == "0.00001234"
+
+
+def test_evento_envenenado_e_descartado_sem_travar_o_lote() -> None:
+    async def caso() -> None:
+        repo, velas, _ = await preparar()
+        pub, armazem = PublicadorMemoria(), ArmazemAnalisesMemoria()
+        motor = MotorAnalise(["BTCUSDT"], repo, armazem, pub, janela_min=300)
+        await motor.carregar(velas[399].fechamento_ms)
+        await repo.inserir([velas[400]])
+        ruim = dict(evento_candle_fechado(velas[400]), abertura="nao-e-numero")
+        r = await motor.processar_entradas(
+            [("1-0", ruim), ("2-0", evento_candle_fechado(velas[400]))]
+        )
+        assert (r.publicadas, r.descartadas, r.falhas) == (1, ["1-0"], [])
+
+    asyncio.run(caso())
+
+
+def test_falha_de_calculo_deixa_so_os_eventos_do_simbolo_para_nova_tentativa() -> None:
+    async def caso() -> None:
+        repo, velas, _ = await preparar()
+        pub, armazem = PublicadorMemoria(), ArmazemAnalisesMemoria()
+        motor = MotorAnalise(["BTCUSDT", "ETHUSDT"], repo, armazem, pub, janela_min=300)
+        await motor.carregar(velas[399].fechamento_ms)
+        await repo.inserir([velas[400]])
+        original = repo.listar
+
+        async def listar(simbolo, *args):  # type: ignore[no-untyped-def]
+            if simbolo == "ETHUSDT":
+                raise RuntimeError("banco fora")
+            return await original(simbolo, *args)
+
+        repo.listar = listar  # type: ignore[method-assign]
+        eth = dict(evento_candle_fechado(velas[400]), simbolo="ETHUSDT")
+        r = await motor.processar_entradas(
+            [("1-0", evento_candle_fechado(velas[400])), ("2-0", eth)]
+        )
+        assert (r.publicadas, r.descartadas, r.falhas) == (1, [], ["2-0"])
+
+    asyncio.run(caso())
+
+
+def test_pendentes_entregues_demais_vao_para_a_fila_morta() -> None:
+    from sinais.processos.motor_analise import decidir_pendentes
+
+    reprocessar, desistir = decidir_pendentes([("1-0", 1), ("2-0", 5), ("3-0", 4)], maximo=5)
+    assert reprocessar == ["1-0", "3-0"] and desistir == ["2-0"]
+
+
+def test_nome_do_consumidor_vem_do_ambiente_ou_do_host() -> None:
+    import socket
+
+    from sinais.processos.motor_analise import nome_consumidor
+
+    assert nome_consumidor({"SINAIS_CONSUMIDOR": "motor-a"}) == "motor-a"
+    assert nome_consumidor({}) == f"motor-{socket.gethostname()}"
+
+
+def test_resumo_separa_sem_tendencia_de_sem_dados() -> None:
+    a = montar_analise(
+        "BTCUSDT",
+        linha(
+            est_tendencia=0.0,
+            m5_est_tendencia=0.0,
+            m15_est_tendencia=1.0,
+            h1_est_tendencia=math.nan,
+        ),
+        "50000.10",
+    )
+    assert "Tendência de alta em 15m" in a.resumo
+    assert "Sem tendência definida em 1m e 5m" in a.resumo
+    assert "Sem dados de tendência em 1h" in a.resumo
+    tudo_nan = {
+        c: math.nan
+        for c in ("est_tendencia", "m5_est_tendencia", "m15_est_tendencia", "h1_est_tendencia")
+    }
+    b = montar_analise("BTCUSDT", linha(**tudo_nan), "50000.10")
+    assert "Sem dados de tendência em 1m, 5m, 15m e 1h" in b.resumo
+    assert not any(f.startswith("Sem tendência definida") for f in b.resumo)
+
+
+def test_resumo_nunca_diz_distancia_negativa() -> None:
+    a = montar_analise(
+        "BTCUSDT", linha(reg_res_dist=-0.3, reg_sup_dist=-0.2, vol_pressao=-0.5), "50000.10"
+    )
+    texto = " | ".join(a.resumo)
+    assert "-0," not in texto and "a -" not in texto
+    assert "Agressão vendedora predominante (0,5)" in a.resumo

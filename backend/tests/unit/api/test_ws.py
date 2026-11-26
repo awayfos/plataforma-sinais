@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 from sinais.processos.motor_analise import montar_analise  # noqa: E402
 
-from ..contas.dubles import SO_BTC, T0, D, admin, cliente  # noqa: E402
+from ..contas.dubles import SO_BTC, T0, D, admin, cliente, plano  # noqa: E402
 from ..processos.test_motor_analise import linha  # noqa: E402
 from .apoio import App, csrf, entrar, entrar_admin, montar  # noqa: E402
 
@@ -145,3 +145,24 @@ def test_bloqueio_pelo_admin_fecha_4401() -> None:
             with pytest.raises(WebSocketDisconnect) as e:
                 ws.receive_json()
             assert e.value.code == 4401
+
+
+def test_plano_reduzido_durante_a_conexao_cancela_o_canal_do_ativo() -> None:
+    app = preparar()
+    with app.cliente() as c:
+        entrar(c, "ana@exemplo.com", SENHA)
+        uid = c.get("/api/eu").json()["id"]
+        with c.websocket_connect("/api/ws", headers=cabecalho(c)) as ws:
+            ws.send_json({"acao": "assinar", "canal": "sinais:ETHUSDT"})
+            assert ws.receive_json()["canal"] == "sinais:ETHUSDT"
+            assert c.portal is not None
+
+            async def rebaixar() -> None:
+                p = await plano(app.amb, SO_BTC, nome="Só BTC")
+                await app.amb.repo.criar_assinatura(uid, p.id, T0, T0 + 90 * D, "manual", T0)
+
+            c.portal.call(rebaixar)
+            msg = ws.receive_json()
+            assert msg["canal"] == "sinais:ETHUSDT"
+            assert msg["erro"]["codigo"] == "ativo_nao_incluido"
+            assert c.portal.call(app.servicos.distribuidor.publicar, "sinais:ETHUSDT", []) == 0

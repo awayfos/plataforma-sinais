@@ -25,5 +25,10 @@ docker compose -f infra/docker-compose.yml --env-file .env exec api \
   python -m sinais.processos.criar_admin --email admin@exemplo.com
 ```
 
-- Atrás de um proxy reverso (nginx, Caddy), defina `SINAIS_CONFIAR_PROXY=true` e faça o proxy acrescentar o IP real em `X-Forwarded-For`: sem isso todos os usuários aparecem com o IP do proxy e dividem o mesmo limite de tentativas de login.
+- **Produção atrás de proxy (Next rewrite, nginx):**
+  - `SINAIS_AMBIENTE=prod` exige `SINAIS_ORIGENS_PERMITIDAS` (ex.: `https://app.exemplo.com`) e recusa a chave de cifra do `.env.example`.
+  - `SINAIS_PROXIES_CONFIAVEIS` lista os CIDRs dos proxies (ex.: `127.0.0.1/32,172.16.0.0/12`). Só conexões vindas deles têm o `X-Forwarded-For` lido, da direita para a esquerda, pulando os proxies; o IP do cliente é o primeiro de fora. Sem isso, todos os usuários aparecem com o IP do proxy e dividem o mesmo limite de login.
+  - O `Origin` do WebSocket precisa estar em `SINAIS_ORIGENS_PERMITIDAS`; o `X-Forwarded-Host` só é considerado quando a conexão vem de um proxy confiável.
+  - O nginx deve repassar `X-Forwarded-For` com `$proxy_add_x_forwarded_for` e o `Upgrade` do WebSocket.
+- Desenvolvimento: o padrão aceita o frontend em `http://localhost:3000`.
 - `infra/fumaca.sh` sobe tudo, cria admin e cliente pela API e confere `/api/candles`, `/api/analise` e `/api/sinais`.

@@ -10,6 +10,7 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -64,15 +65,23 @@ def interpretar(
     raise ErroMensagem("canal desconhecido")
 
 
-def origem_permitida(origem: str | None, host: str | None, permitidas: Sequence[str]) -> bool:
+def origem_permitida(
+    origem: str | None,
+    permitidas: Sequence[str],
+    host_encaminhado: str | None = None,
+    proxy_confiavel: bool = False,
+) -> bool:
     """Defesa contra sequestro de WebSocket entre sites: a sessão vai no cookie, então só se
-    aceita a própria origem (mesmo host) ou uma da lista. Sem ``Origin`` (cliente que não é
+    aceitam as origens de ``SINAIS_ORIGENS_PERMITIDAS`` ou, quando a conexão vem de um proxy
+    confiável, a do ``X-Forwarded-Host`` que ele informou. Sem ``Origin`` (cliente que não é
     navegador) é aceito: o cookie continua sendo exigido."""
     if origem is None:
         return True
     if origem in permitidas:
         return True
-    return bool(host) and urlsplit(origem).netloc == host
+    if proxy_confiavel and host_encaminhado:
+        return urlsplit(origem).netloc == host_encaminhado.split(",")[0].strip()
+    return False
 
 
 @dataclass(eq=False)
@@ -148,12 +157,31 @@ def traduzir_evento(
     return []
 
 
-def ip_do_cliente(conexao: str | None, encaminhado: str | None, confiar_proxy: bool) -> str:
-    """IP para limites e logs. Atrás do proxy confiável vale a ÚLTIMA entrada de
-    ``X-Forwarded-For`` (a que o proxy acrescentou); as anteriores vêm do cliente e podem ser
-    forjadas para fugir do limite por IP."""
-    if confiar_proxy and encaminhado:
-        ultimo = encaminhado.split(",")[-1].strip()
-        if ultimo:
-            return ultimo[:64]
-    return (conexao or "desconhecido")[:64]
+type RedeIp = IPv4Network | IPv6Network
+
+
+def _endereco(texto: str | None) -> IPv4Address | IPv6Address | None:
+    try:
+        return ip_address((texto or "").strip())
+    except ValueError:
+        return None
+
+
+def de_proxy_confiavel(conexao: str | None, proxies: Sequence[RedeIp]) -> bool:
+    ip = _endereco(conexao)
+    return ip is not None and any(ip in rede for rede in proxies)
+
+
+def ip_do_cliente(conexao: str | None, encaminhado: str | None, proxies: Sequence[RedeIp]) -> str:
+    """IP para limites e logs. Só se lê ``X-Forwarded-For`` quando a conexão vem de um proxy
+    de ``SINAIS_PROXIES_CONFIAVEIS``; então anda da direita para a esquerda pulando os proxies
+    confiáveis (Next, nginx) e fica com o primeiro endereço de fora. O que está à esquerda dele
+    veio do cliente e pode ser forjado."""
+    if not de_proxy_confiavel(conexao, proxies) or not encaminhado:
+        return (conexao or "desconhecido")[:64]
+    entradas = [e.strip() for e in encaminhado.split(",") if e.strip()]
+    for entrada in reversed(entradas):
+        ip = _endereco(entrada)
+        if ip is None or not any(ip in rede for rede in proxies):
+            return entrada[:64]
+    return (entradas[0] if entradas else conexao or "desconhecido")[:64]

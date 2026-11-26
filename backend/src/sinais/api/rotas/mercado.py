@@ -58,7 +58,7 @@ async def candles(
 ) -> list[e.CandleSaida]:
     exigir_ativo(ctx, s, simbolo)
     lista = await s.mercado.candles(
-        simbolo, TempoGrafico(tg), ate if ate is not None else ctx.agora, limite
+        simbolo, TempoGrafico(tg), ate if ate is not None else ctx.agora, limite, ctx.agora
     )
     return [candle_saida(c) for c in lista]
 

@@ -59,8 +59,8 @@ def montar_servicos() -> Any:  # pragma: no cover - ligação de I/O
         campeao=campeao_do_registro(api.registro_modelos),
         cookie_seguro=api.cookie_seguro,
         ws_verificacao_s=api.ws_verificacao_s,
-        origens_permitidas=api.origens_permitidas,
-        confiar_proxy=api.confiar_proxy,
+        origens_permitidas=api.origens_permitidas or (),
+        proxies_confiaveis=api.proxies_confiaveis,
         documentacao=api.documentacao,
         fonte_eventos=fonte_redis(redis),
     )

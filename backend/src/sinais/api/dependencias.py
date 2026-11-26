@@ -26,7 +26,7 @@ Svc = Annotated[Servicos, Depends(servicos)]
 def ip_cliente(request: Request, s: Servicos) -> str:
     conexao: str | None = request.client.host if request.client else None
     encaminhado: str | None = request.headers.get("x-forwarded-for")
-    return ip_do_cliente(conexao, encaminhado, s.confiar_proxy)
+    return ip_do_cliente(conexao, encaminhado, s.proxies_confiaveis)
 
 
 async def sessao(request: Request, s: Svc) -> Contexto:

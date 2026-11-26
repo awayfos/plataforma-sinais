@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import asyncio
 import math
+import os
 import signal
+import socket
 from collections import deque
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -149,7 +152,8 @@ def montar_analise(
         ),
         resumo=[],
     )
-    return analise.model_copy(update={"resumo": montar_resumo(analise)})
+    sem_dados = [rotulo for rotulo, col in _TENDENCIAS if not math.isfinite(campo(col))]
+    return analise.model_copy(update={"resumo": montar_resumo(analise, sem_dados)})
 
 
 # ------------------------------------------------------------------ resumo
@@ -174,17 +178,23 @@ _EVENTOS = {
 }
 
 
-def montar_resumo(a: Analise) -> list[str]:
-    """Frases curtas por template. Todo número do texto é um campo da própria ``Analise``."""
+def montar_resumo(a: Analise, sem_dados: Sequence[str] = ()) -> list[str]:
+    """Frases curtas por template. Todo número do texto é um campo da própria ``Analise``.
+
+    ``sem_dados``: tempos gráficos sem histórico para a tendência (no contrato saem 0); o texto
+    diz "sem dados" em vez de afirmar que não há tendência."""
     frases: list[str] = []
-    alta = [tg for tg, v in a.tendencia.items() if v == 1]
-    baixa = [tg for tg, v in a.tendencia.items() if v == -1]
+    alta = [tg for tg, v in a.tendencia.items() if v == 1 and tg not in sem_dados]
+    baixa = [tg for tg, v in a.tendencia.items() if v == -1 and tg not in sem_dados]
+    neutra = [tg for tg, v in a.tendencia.items() if v == 0 and tg not in sem_dados]
     if alta:
         frases.append(f"Tendência de alta em {_lista(alta)}")
     if baixa:
         frases.append(f"Tendência de baixa em {_lista(baixa)}")
-    if not alta and not baixa:
-        frases.append(f"Sem tendência definida em {_lista(list(a.tendencia))}")
+    if neutra:
+        frases.append(f"Sem tendência definida em {_lista(neutra)}")
+    if sem_dados:
+        frases.append(f"Sem dados de tendência em {_lista(list(sem_dados))}")
     adx = a.forca_tendencia
     if adx is not None and adx >= 25:
         frases.append(f"Tendência forte (ADX {_fmt(adx)})")
@@ -192,14 +202,20 @@ def montar_resumo(a: Analise) -> list[str]:
         frases.append(f"Tendência fraca (ADX {_fmt(adx)})")
     if a.regioes.resistencia is not None:
         r = a.regioes.resistencia
-        frases.append(
-            f"Preço a {_fmt(r.distancia_atr)} ATR de uma resistência tocada {_vezes(r.toques)}"
-        )
+        if r.distancia_atr > 0:
+            frases.append(
+                f"Preço a {_fmt(r.distancia_atr)} ATR de uma resistência tocada {_vezes(r.toques)}"
+            )
+        else:
+            frases.append(f"Preço sobre uma resistência tocada {_vezes(r.toques)}")
     if a.regioes.suporte is not None:
         s = a.regioes.suporte
-        frases.append(
-            f"Preço a {_fmt(s.distancia_atr)} ATR de um suporte tocado {_vezes(s.toques)}"
-        )
+        if s.distancia_atr > 0:
+            frases.append(
+                f"Preço a {_fmt(s.distancia_atr)} ATR de um suporte tocado {_vezes(s.toques)}"
+            )
+        else:
+            frases.append(f"Preço sobre um suporte tocado {_vezes(s.toques)}")
     if a.estrutura.ultimo_evento is not None:
         frases.append(_EVENTOS[a.estrutura.ultimo_evento])
     rsi = a.indicadores.rsi
@@ -216,7 +232,7 @@ def montar_resumo(a: Analise) -> list[str]:
     if pressao is not None and pressao >= 0.3:
         frases.append(f"Agressão compradora predominante ({_fmt(pressao)})")
     elif pressao is not None and pressao <= -0.3:
-        frases.append(f"Agressão vendedora predominante ({_fmt(pressao)})")
+        frases.append(f"Agressão vendedora predominante ({_fmt(abs(pressao))})")
     pa = a.price_action
     if pa.lateral:
         frases.append("Mercado lateral")
@@ -226,6 +242,31 @@ def montar_resumo(a: Analise) -> list[str]:
 
 
 # ------------------------------------------------------------- motor ao vivo
+MAXIMO_ENTREGAS = 5
+STREAM_MORTOS = "candle.fechado.mortos"
+
+
+@dataclass(frozen=True, slots=True)
+class ResultadoLote:
+    publicadas: int
+    descartadas: list[str]
+    falhas: list[str]
+
+
+def decidir_pendentes(
+    pendentes: Sequence[tuple[str, int]], maximo: int = MAXIMO_ENTREGAS
+) -> tuple[list[str], list[str]]:
+    """(ids para tentar de novo, ids que já foram entregues ``maximo`` vezes: fila morta)."""
+    reprocessar = [i for i, n in pendentes if n < maximo]
+    desistir = [i for i, n in pendentes if n >= maximo]
+    return reprocessar, desistir
+
+
+def nome_consumidor(env: Mapping[str, str]) -> str:
+    """Nome estável por réplica: ``SINAIS_CONSUMIDOR`` ou o nome do host do contêiner."""
+    return env.get("SINAIS_CONSUMIDOR") or f"motor-{socket.gethostname()}"
+
+
 class MotorAnalise:
     def __init__(
         self,
@@ -273,32 +314,61 @@ class MotorAnalise:
         return bool(novos)
 
     async def processar_lote(self, eventos: Sequence[Mapping[str, str]]) -> int:
-        """Processa eventos ``candle.fechado``; calcula uma vez por símbolo. Devolve quantas
-        análises publicou."""
+        """Atalho para testes e para o carregamento: devolve quantas análises publicou."""
+        r = await self.processar_entradas([(str(i), ev) for i, ev in enumerate(eventos)])
+        return r.publicadas
+
+    async def processar_entradas(
+        self, entradas: Sequence[tuple[str, Mapping[str, str]]]
+    ) -> ResultadoLote:
+        """Processa entradas ``(id, campos)`` de ``candle.fechado``; calcula uma vez por
+        símbolo. Evento malformado vai para ``descartadas`` (nunca melhora: ACK e fila morta);
+        falha de cálculo deixa só os eventos daquele símbolo em ``falhas`` (nova tentativa)."""
         alvo: dict[str, int] = {}
-        for ev in eventos:
-            simbolo = ev.get("simbolo", "")
-            if ev.get("intervalo_ms") != str(_M) or simbolo not in self._janelas:
+        ids: dict[str, list[str]] = {}
+        descartadas: list[str] = []
+        for id_, ev in entradas:
+            if ev.get("intervalo_ms") != str(_M):
                 continue
-            abertura = int(ev["abertura"])
+            try:
+                simbolo = ev["simbolo"]
+                abertura = int(ev["abertura"])
+            except (KeyError, TypeError, ValueError):
+                descartadas.append(id_)
+                _log.error("motor_analise.evento_invalido", extra={"campos": {"id": id_}})
+                continue
+            if simbolo not in self._janelas:
+                continue
             ultima = self.ultima_abertura(simbolo)
             if ultima is not None and abertura <= ultima:
                 continue
             alvo[simbolo] = max(abertura, alvo.get(simbolo, abertura))
+            ids.setdefault(simbolo, []).append(id_)
         publicadas = 0
+        falhas: list[str] = []
         for simbolo, abertura in alvo.items():
-            if not await self._sincronizar(simbolo, abertura):
-                continue
-            analise = await asyncio.to_thread(self.calcular, simbolo)
-            if analise is None:
-                continue
-            texto = analise.model_dump_json()
-            await self._armazem.salvar(simbolo, texto)
-            await self._pub.publicar(
-                STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada(simbolo, analise.t, texto)
-            )
-            publicadas += 1
-        return publicadas
+            try:
+                publicadas += await self._publicar(simbolo, abertura)
+            except Exception as erro:
+                falhas.extend(ids[simbolo])
+                _log.error(
+                    "motor_analise.calculo_falhou",
+                    extra={"campos": {"simbolo": simbolo, "erro": type(erro).__name__}},
+                )
+        return ResultadoLote(publicadas, descartadas, falhas)
+
+    async def _publicar(self, simbolo: str, abertura: int) -> int:
+        if not await self._sincronizar(simbolo, abertura):
+            return 0
+        analise = await asyncio.to_thread(self.calcular, simbolo)
+        if analise is None:
+            return 0
+        texto = analise.model_dump_json()
+        await self._armazem.salvar(simbolo, texto)
+        await self._pub.publicar(
+            STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada(simbolo, analise.t, texto)
+        )
+        return 1
 
     def calcular(self, simbolo: str) -> Analise | None:
         velas = self.janela(simbolo)
@@ -353,33 +423,53 @@ async def principal() -> None:  # pragma: no cover - ligação de I/O
             await publicador.publicar(
                 STREAM_ANALISE_ATUALIZADA, evento_analise_atualizada(simbolo, analise.t, texto)
             )
-    consumidor = "motor-1"
-    _log.info("motor_analise.iniciado")
-    pendentes = "0"  # primeiro relê o que ficou sem ACK (reinício), depois só novos
+    consumidor = nome_consumidor(os.environ)
+    _log.info("motor_analise.iniciado", extra={"campos": {"consumidor": consumidor}})
+
+    async def concluir(entradas: list[tuple[str, dict[str, str]]]) -> None:
+        r = await motor.processar_entradas(entradas)
+        for id_ in r.descartadas:
+            campos = next(c for i, c in entradas if i == id_)
+            await redis.xadd(STREAM_MORTOS, {**campos, "id_original": id_}, maxlen=10_000)
+        ok = [i for i, _ in entradas if i not in set(r.falhas)]
+        if ok:
+            await redis.xack(STREAM_CANDLE_FECHADO, GRUPO, *ok)
+        if r.publicadas:
+            _log.info("motor_analise.publicado", extra={"campos": {"analises": r.publicadas}})
+
+    async def revisar_pendentes() -> None:
+        """Pendentes sem ACK: tenta de novo; depois de MAXIMO_ENTREGAS, fila morta."""
+        pend = await redis.xpending_range(
+            STREAM_CANDLE_FECHADO, GRUPO, min="-", max="+", count=500, consumername=consumidor
+        )
+        reprocessar, desistir = decidir_pendentes(
+            [(p["message_id"], int(p["times_delivered"])) for p in pend]
+        )
+        for id_ in desistir:
+            for i, campos in await redis.xrange(STREAM_CANDLE_FECHADO, id_, id_):
+                await redis.xadd(STREAM_MORTOS, {**campos, "id_original": i}, maxlen=10_000)
+            await redis.xack(STREAM_CANDLE_FECHADO, GRUPO, id_)
+            _log.error("motor_analise.fila_morta", extra={"campos": {"id": id_}})
+        if reprocessar:
+            # XCLAIM entrega de novo (e conta a entrega) as que falharam.
+            entradas = await redis.xclaim(STREAM_CANDLE_FECHADO, GRUPO, consumidor, 0, reprocessar)
+            await concluir([(i, c) for i, c in entradas if c])
+
+    proxima_revisao = 0.0
     while not parar.is_set():
         try:
+            if laco.time() >= proxima_revisao:
+                await revisar_pendentes()
+                proxima_revisao = laco.time() + 30
             resposta = await redis.xreadgroup(
-                GRUPO, consumidor, {STREAM_CANDLE_FECHADO: pendentes}, count=500, block=2000
+                GRUPO, consumidor, {STREAM_CANDLE_FECHADO: ">"}, count=500, block=2000
             )
+            entradas = [(i, c) for _, lista in resposta or [] for i, c in lista]
+            if entradas:
+                await concluir(entradas)
         except Exception as erro:
-            _log.error("motor_analise.leitura_falhou", extra={"campos": {"erro": repr(erro)}})
+            _log.error("motor_analise.laco_falhou", extra={"campos": {"erro": repr(erro)}})
             await asyncio.sleep(1)
-            continue
-        entradas = [(i, c) for _, lista in resposta for i, c in lista]
-        if pendentes == "0" and not entradas:
-            pendentes = ">"
-            continue
-        if not entradas:
-            continue
-        try:
-            n = await motor.processar_lote([c for _, c in entradas])
-        except Exception as erro:
-            _log.error("motor_analise.calculo_falhou", extra={"campos": {"erro": repr(erro)}})
-            await asyncio.sleep(1)
-            continue
-        await redis.xack(STREAM_CANDLE_FECHADO, GRUPO, *[i for i, _ in entradas])
-        if n:
-            _log.info("motor_analise.publicado", extra={"campos": {"analises": n}})
     await redis.aclose()
     await engine.dispose()
 

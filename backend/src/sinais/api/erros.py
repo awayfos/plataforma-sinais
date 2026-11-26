@@ -28,6 +28,20 @@ RESPOSTAS_ERRO: dict[int | str, dict[str, object]] = {
 }
 
 
+def cabecalhos_seguranca(https: bool, documentacao: bool = False) -> dict[str, str]:
+    h = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+        "Cache-Control": "no-store",
+    }
+    if not documentacao:
+        h["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    if https:
+        h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return h
+
+
 def resposta_erro(status: int, codigo: str, mensagem: str) -> JSONResponse:
     return JSONResponse({"erro": {"codigo": codigo, "mensagem": mensagem}}, status_code=status)
 
@@ -41,7 +55,7 @@ def _campos(erro: RequestValidationError) -> str:
     return ", ".join(dict.fromkeys(nomes)) or "corpo"
 
 
-def instalar(app: FastAPI) -> None:
+def instalar(app: FastAPI, https: bool = True) -> None:
     @app.exception_handler(ErroConta)
     async def _conta(_: Request, erro: ErroConta) -> JSONResponse:
         return resposta_erro(erro.status, erro.codigo, erro.mensagem)
@@ -55,10 +69,18 @@ def instalar(app: FastAPI) -> None:
         codigo, mensagem = _POR_STATUS.get(erro.status_code, ("erro", "Erro na requisição."))
         return resposta_erro(erro.status_code, codigo, mensagem)
 
+    @app.exception_handler(RecursionError)
+    async def _recursao(_: Request, erro: RecursionError) -> JSONResponse:
+        # JSON aninhado demais para o parser: erro do cliente, não do servidor.
+        return resposta_erro(422, "validacao", "Dados inválidos: aninhamento demais.")
+
     @app.exception_handler(Exception)
     async def _interno(request: Request, erro: Exception) -> JSONResponse:
         _log.error(
             "api.erro_interno",
             extra={"campos": {"rota": request.url.path, "erro": type(erro).__name__}},
         )
-        return resposta_erro(500, "erro_interno", "Erro interno. Tente de novo em instantes.")
+        # Esta resposta sai pelo ServerErrorMiddleware, por fora do middleware de cabeçalhos.
+        r = resposta_erro(500, "erro_interno", "Erro interno. Tente de novo em instantes.")
+        r.headers.update(cabecalhos_seguranca(https))
+        return r
