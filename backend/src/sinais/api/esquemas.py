@@ -6,23 +6,18 @@ Instantes em ms UTC (``int``); preços de candle como string decimal; valores de
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from sinais.dados.modelos import decimal_texto
+
+__all__ = ["decimal_texto"]
 
 type TempoTendencia = Literal["1m", "5m", "15m", "1h"]
 type ExpiracaoRotulo = Literal["1m", "5m", "15m", "30m", "60m"]
 type EventoEstrutura = Literal["BOS_ALTA", "BOS_BAIXA", "CHOCH_ALTA", "CHOCH_BAIXA"]
 type TempoGraficoRotulo = Literal["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
-
-
-def decimal_texto(d: Decimal) -> str:
-    """Decimal sem zeros à direita e sem notação científica (``50000.100000`` → ``50000.1``)."""
-    texto = format(d, "f")
-    if "." in texto:
-        texto = texto.rstrip("0").rstrip(".")
-    return texto or "0"
 
 
 class _Saida(BaseModel):
