@@ -1,0 +1,34 @@
+name: Situações — confirmação
+
+# Design §9b.2: reprocessa, todo mês, os meses novos fechados (a partir de 2026-11) com o mesmo
+# código da descoberta e imprime o acumulado da confirmação e os sinais liquidados no log.
+# O arquivo mensal da Binance sai nos primeiros dias do mês seguinte; roda no dia 3.
+on:
+  schedule:
+    - cron: "17 7 3 * *"
+  workflow_dispatch:
+    inputs:
+      argumentos:
+        description: "Argumentos extras de sinais.situacoes.confirmacao"
+        default: ""
+
+jobs:
+  confirmacao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - name: Confirmação
+        env:
+          ARGUMENTOS: ${{ inputs.argumentos || '' }}
+        run: |
+          # shellcheck disable=SC2086 # divisão em palavras intencional
+          uv run python -m sinais.situacoes.confirmacao $ARGUMENTOS
