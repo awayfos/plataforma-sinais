@@ -162,17 +162,45 @@ def test_distribuidor_entrega_por_canal_e_descarta_o_mais_antigo() -> None:
         d.assinar(a, "analise:BTCUSDT")
         d.assinar(b, "analise:ETHUSDT")
         assert d.publicar("analise:BTCUSDT", {"n": 1}) == 1
-        assert await a.fila.get() == {"canal": "analise:BTCUSDT", "dados": {"n": 1}}
+        assert json.loads(str(await a.fila.get())) == {
+            "canal": "analise:BTCUSDT",
+            "dados": {"n": 1},
+        }
         assert b.fila.empty()
         for n in range(3):
             d.publicar("analise:BTCUSDT", {"n": n})
-        assert [(await a.fila.get())["dados"]["n"] for _ in range(2)] == [1, 2]
+        assert [json.loads(str(await a.fila.get()))["dados"]["n"] for _ in range(2)] == [1, 2]
         d.cancelar(a, "analise:BTCUSDT")
         assert d.publicar("analise:BTCUSDT", {}) == 0
         d.assinar(b, "analise:BTCUSDT")
         d.remover(b)
         assert d.publicar("analise:BTCUSDT", {}) == 0
         assert d.publicar("analise:ETHUSDT", {}) == 0
+
+    asyncio.run(caso())
+
+
+def test_publicacao_codifica_o_json_uma_vez_para_todos_os_assinantes() -> None:
+    async def caso() -> None:
+        d = Distribuidor()
+        assinantes = [d.novo_assinante() for _ in range(5)]
+        for a in assinantes:
+            d.assinar(a, "candles:BTCUSDT:1m")
+        assert d.publicar("candles:BTCUSDT:1m", {"t": 1, "c": "2"}) == 5
+        recebidas = [a.fila.get_nowait() for a in assinantes]
+        # o mesmo texto (mesmo objeto) vai para todos: um json.dumps por publicação
+        assert all(isinstance(m, str) and m is recebidas[0] for m in recebidas)
+        assert json.loads(str(recebidas[0])) == {
+            "canal": "candles:BTCUSDT:1m",
+            "dados": {"t": 1, "c": "2"},
+        }
+        # sinais são filtrados por plano em cada conexão: seguem como objeto
+        d.assinar(assinantes[0], "sinais:BTCUSDT")
+        d.publicar("sinais:BTCUSDT", [{"expiracao": "1m"}])
+        assert assinantes[0].fila.get_nowait() == {
+            "canal": "sinais:BTCUSDT",
+            "dados": [{"expiracao": "1m"}],
+        }
 
     asyncio.run(caso())
 
