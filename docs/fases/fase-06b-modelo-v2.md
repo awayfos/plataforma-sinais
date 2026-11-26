@@ -70,3 +70,23 @@ Opções para o cliente:
 1. Seguir com o caminho B, **painel de análise sem sinais**, enquanto a pesquisa continua.
 2. Testar fontes de informação realmente novas, como livro de ofertas, fluxo entre corretoras e funding, e não só derivados dos klines. Avaliar com meses novos, a partir de 2026-11, como holdout limpo.
 3. Investigar o preço de referência da própria Exnova. Em 1 min, 15 a 30% das operações filtradas ainda terminam apertadas, e ali a diferença entre a Binance e a Exnova decide o resultado.
+
+## 7. Pré-registro da rodada confirmatória (fixado em 2026-11-26, antes do diagnóstico)
+
+A revisão independente apontou que a entrada sorteada em toda a janela de compra é pessimista para o 5m. Na janela de 5 min, a entrada pode cair até cerca de 4 min depois do sinal. A revisão também apontou que essa entrada ignora a tolerância de preço do design §12.6. Por isso fica registrada **agora**, antes de qualquer número, a única configuração que será avaliada na rodada confirmatória com meses novos. Nada nela pode mudar depois do diagnóstico da seção 8.
+
+| Item | Valor fixado |
+|---|---|
+| Código | O deste PR: `fs-2 + filtro`, com calibração isotônica na 1ª metade do mês de calibração e limiar do filtro na 2ª |
+| Entrada | Segundo sorteado entre a decisão + 2 s e a decisão + 10 s (sem passar do prazo de compra), nos rótulos e na simulação |
+| Tolerância de preço | Não entra se, na entrada, o preço estiver a mais de 0,5 × ATR(14) de 1m do preço da decisão (`FORA_DA_TOLERANCIA`). Vale para o modelo e para as estratégias simples |
+| Dados | `--meses 27 --fim 2027-01`: holdout = 2026-11, 2026-12 e 2027-01, meses ainda não vistos por nenhum modelo |
+| Walk-forward | Treino 6 meses (1 a cada 3 minutos), calibração 1, teste 1; purga pelo vencimento real; embargo de 1 h |
+| Combinações | BTCUSDT e ETHUSDT × 1m e 5m; Benjamini-Hochberg sobre as 4 |
+| Critérios | Os mesmos da Fase 6 (§13.3): n ≥ 300; Wilson inferior > equilíbrio + 1 p.p.; supera as estratégias simples; ≥ 70% dos meses testados acima do equilíbrio; Benjamini-Hochberg; holdout com ≥ 100 operações e Wilson inferior > equilíbrio |
+| Payout | 0,86 (equilíbrio de 53,76%) |
+| Execução | Workflow "Modelos v2" com `--meses 27 --fim 2027-01 --payout 0.86 --entrada-max-s 10 --tolerancia-atr 0.5`, depois da publicação do mês 2027-01 na Binance (a partir de 2027-02-01) |
+
+**Implicação de produto, se aprovada:** o cartão do sinal precisa orientar a entrada nos primeiros 10 s e mostrar "Fora da janela, não entre" quando o preço se afastar mais que a tolerância.
+
+Se qualquer item mudar, a rodada deixa de ser confirmatória e precisa de outros meses novos.

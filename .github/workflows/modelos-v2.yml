@@ -9,13 +9,24 @@ on:
       argumentos:
         description: "Argumentos de sinais.modelos.decisao_v2"
         default: "--meses 24 --fim 2026-10 --payout 0.86"
+  # TEMPORÁRIO: roda a partir do ramo da Fase 6b (workflow_dispatch só vale para a main).
+  push:
+    branches: [fase-06b-modelo-v2]
+    paths: [.github/workflows/modelos-v2.yml]
 
 jobs:
   modelos-v2:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        # TEMPORÁRIO: rodada principal (após a correção da calibração) e diagnóstico de
+        # sensibilidade pré-registrado (sem direito a aprovação).
+        rodada: [principal, sensibilidade]
     defaults:
       run:
+        shell: bash
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
@@ -24,13 +35,18 @@ jobs:
           python-version: "3.13"
       - run: uv sync
       - name: Avaliação v2
+        env:
+          ARGUMENTOS: >-
+            ${{ inputs.argumentos || (matrix.rodada == 'principal'
+            && '--meses 24 --fim 2026-10 --payout 0.86'
+            || '--meses 24 --fim 2026-10 --payout 0.86 --entrada-max-s 10 --tolerancia-atr 0.5 --sem-ablacao-fs1') }}
         run: |
           mkdir -p relatorio
-          /usr/bin/time -v uv run python -m sinais.modelos.decisao_v2 \
-            ${{ inputs.argumentos }} --saida relatorio \
-            2>&1 | tee relatorio/execucao.log
+          # shellcheck disable=SC2086 # divisão em palavras intencional (lista de argumentos)
+          /usr/bin/time -v uv run python -m sinais.modelos.decisao_v2 $ARGUMENTOS \
+            --saida relatorio 2>&1 | tee relatorio/execucao.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: relatorio-modelos-v2
+          name: relatorio-modelos-v2-${{ matrix.rodada }}
           path: backend/relatorio/
