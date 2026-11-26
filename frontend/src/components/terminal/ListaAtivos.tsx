@@ -1,6 +1,7 @@
 "use client";
 
 import type { Ativo } from "@/lib/api/tipos";
+import { PrecoAoVivo } from "./PrecoAoVivo";
 
 export function ListaAtivos({
   ativos,
@@ -31,6 +32,7 @@ export function ListaAtivos({
               <span className="min-w-0">
                 <span className="num block text-[13px] font-semibold text-texto">{a.simbolo}</span>
                 <span className="block truncate text-[11px] text-apagado">{a.nome}</span>
+                {a.aberto && <PrecoAoVivo simbolo={a.simbolo} className="mt-0.5 block text-[12px]" />}
               </span>
               <span
                 className={`inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase ${

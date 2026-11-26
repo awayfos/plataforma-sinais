@@ -33,3 +33,21 @@ export function legendaVisivel<T extends Candle>(foco: { chave: string; candle: 
   if (foco && foco.chave === chave) return foco.candle;
   return candles.at(-1) ?? null;
 }
+
+const MINUTO = 60_000;
+const DURACAO: Record<TempoGrafico, number> = {
+  "1m": MINUTO,
+  "3m": 3 * MINUTO,
+  "5m": 5 * MINUTO,
+  "15m": 15 * MINUTO,
+  "30m": 30 * MINUTO,
+  "1h": 60 * MINUTO,
+  "4h": 240 * MINUTO,
+  "1d": 1_440 * MINUTO,
+  "1w": 10_080 * MINUTO,
+};
+
+/** Duração de uma barra do tempo gráfico, em ms (a barra de t fecha em t + duração). */
+export function duracaoTempo(tempo: TempoGrafico): number {
+  return DURACAO[tempo];
+}

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api/endpoints";
-import type { Analise, Candle, Desenho, IndicadoresGrafico, Sinal, TempoGrafico } from "@/lib/api/tipos";
-import { mesclarCandle } from "@/lib/candles";
+import type { Analise, Desenho, IndicadoresGrafico, Sinal, TempoGrafico } from "@/lib/api/tipos";
 import { useDados } from "@/lib/useDados";
 import { useCanal, useReconexoes, useStatusTempoReal } from "@/lib/ws/ProvedorTempoReal";
 import { useSessao } from "@/components/sessao/ProvedorSessao";
@@ -15,10 +14,12 @@ import { CartaoSinal } from "./CartaoSinal";
 import { Grafico, type Ferramenta } from "./Grafico";
 import { ListaAtivos } from "./ListaAtivos";
 import { PainelAnalise } from "./PainelAnalise";
+import { CanalPreco, PrecoAoVivo } from "./PrecoAoVivo";
 import { TabelaSinais } from "./TabelaSinais";
 
 const INDICADORES_PADRAO: IndicadoresGrafico = { ema: true, bollinger: false, vwap: false, rsi: true, macd: false };
 const LIMITE_CANDLES = 500;
+const SEM_CANDLES: never[] = [];
 
 function maisRecente(a: Analise | null | undefined, b: Analise | null | undefined): Analise | null {
   if (!a) return b ?? null;
@@ -70,22 +71,12 @@ export function Terminal() {
     (s) => api.candles({ simbolo: simbolo!, tg: tempo, limite: LIMITE_CANDLES }, s),
     reconexoes,
   );
-  const [aoVivo, setAoVivo] = useState<{ chave: string | null; lista: Candle[] }>({ chave: null, lista: [] });
+  // Os ticks do candle em formação vão direto para o gráfico (imperativo, um quadro por vez);
+  // aqui o canal só é observado para mostrar erros do servidor.
   const canalCandles = simbolo ? (`candles:${simbolo}:${tempo}` as const) : null;
   const canalAnalise = simbolo && aberto ? (`analise:${simbolo}` as const) : null;
   const canalSinais = simbolo && aberto ? (`sinais:${simbolo}` as const) : null;
-  useCanal(canalCandles, (c) => {
-    const candle: Candle = { t: c.t, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v };
-    setAoVivo((prev) => ({
-      chave: chaveSerie,
-      lista: mesclarCandle(prev.chave === chaveSerie ? prev.lista : [], candle).slice(-60),
-    }));
-  }, registrarErro(canalCandles ?? ""));
-  const candles = useMemo(() => {
-    const base = candlesQ.dados ?? [];
-    if (aoVivo.chave !== chaveSerie) return base;
-    return aoVivo.lista.reduce((acc, c) => mesclarCandle(acc, c), base);
-  }, [candlesQ.dados, aoVivo, chaveSerie]);
+  useCanal(canalCandles, () => {}, registrarErro(canalCandles ?? ""));
 
   // Análise e sinais: REST no início, WebSocket depois.
   const analiseQ = useDados(simbolo && aberto ? `analise:${simbolo}` : null, (s) => api.analise(simbolo!, s), reconexoes);
@@ -151,6 +142,9 @@ export function Terminal() {
           <Vazio titulo="Nenhum ativo disponível" />
         ) : (
           <div className="overflow-x-auto lg:overflow-visible">
+            {ativos.filter((a) => a.aberto).map((a) => (
+              <CanalPreco key={a.simbolo} simbolo={a.simbolo} />
+            ))}
             <ListaAtivos
               ativos={ativos}
               selecionado={simbolo}
@@ -170,6 +164,7 @@ export function Terminal() {
       <section className="flex min-h-[460px] min-w-0 flex-col bg-painel" aria-label="Gráfico">
         <div className="flex items-center gap-3 border-b border-borda px-3 py-2">
           <h1 className="num text-sm font-semibold">{simbolo ?? "—"}</h1>
+          {simbolo && <PrecoAoVivo simbolo={simbolo} className="text-sm font-semibold" />}
           {ativo && <span className="text-xs text-apagado">{ativo.nome}</span>}
           {ativo && !ativo.aberto && <span className="rounded bg-painel-2 px-1.5 py-0.5 text-[10px] font-semibold text-apagado uppercase">Fechado</span>}
           {erroSalvar && (
@@ -201,7 +196,7 @@ export function Terminal() {
           </div>
         ) : (
           <div className="relative flex min-h-0 flex-1 flex-col">
-            {candlesQ.carregando && candles.length === 0 && (
+            {candlesQ.carregando && !candlesQ.dados && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-painel/60">
                 <span role="status" className="text-xs text-apagado">
                   Carregando candles…
@@ -209,8 +204,8 @@ export function Terminal() {
               </div>
             )}
             <Grafico
-              candles={candles}
-              chave={chaveSerie ?? ""}
+              candles={candlesQ.dados ?? SEM_CANDLES}
+              canal={canalCandles}
               tempo={tempo}
               indicadores={indicadores}
               paineis={avancado}

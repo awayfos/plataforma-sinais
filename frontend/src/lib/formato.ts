@@ -91,3 +91,16 @@ export function periodoAteAgora(dias: number): { inicio: number; fim: number } {
   const fim = Date.now();
   return { inicio: fim - dias * 86_400_000, fim };
 }
+
+/** Tempo até o fechamento do candle, como no rótulo do eixo da Binance: "00:37", "03:01:01", "2d 01:00". */
+export function formatarContagemVela(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const d = Math.floor(total / 86_400);
+  const h = Math.floor((total % 86_400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const p = (n: number) => String(n).padStart(2, "0");
+  if (d > 0) return `${d}d ${p(h)}:${p(m)}`;
+  if (h > 0) return `${p(h)}:${p(m)}:${p(s)}`;
+  return `${p(m)}:${p(s)}`;
+}

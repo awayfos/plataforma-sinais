@@ -58,3 +58,29 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes piscar-alta {
+  from {
+    background-color: color-mix(in oklab, var(--color-alta) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes piscar-baixa {
+  from {
+    background-color: color-mix(in oklab, var(--color-baixa) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.piscar-alta {
+  animation: piscar-alta 0.6s ease-out;
+}
+
+.piscar-baixa {
+  animation: piscar-baixa 0.6s ease-out;
+}

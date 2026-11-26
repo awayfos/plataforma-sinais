@@ -1,12 +1,18 @@
 import type { Analise, CandleAoVivo, ErroCanal, Sinal, TempoGrafico } from "../api/tipos";
 
-export type Canal = `candles:${string}:${TempoGrafico}` | `analise:${string}` | `sinais:${string}`;
+export type Canal =
+  | `candles:${string}:${TempoGrafico}`
+  | `analise:${string}`
+  | `sinais:${string}`
+  | `preco:${string}`;
 
 export type DadosDoCanal<C extends Canal> = C extends `candles:${string}`
   ? CandleAoVivo
   : C extends `analise:${string}`
     ? Analise
-    : Sinal[];
+    : C extends `sinais:${string}`
+      ? Sinal[]
+      : unknown;
 
 /** "indisponivel": o servidor recusa o handshake mas a sessão HTTP está válida; tenta de novo devagar. */
 export type StatusConexao = "ocioso" | "conectando" | "conectado" | "reconectando" | "indisponivel" | "encerrado";
@@ -52,7 +58,7 @@ export function atrasoReconexao(tentativa: number, aleatorio: () => number = Mat
   return Math.round(base / 2 + (aleatorio() * base) / 2);
 }
 
-type Ouvinte = (dados: unknown) => void;
+type Ouvinte = (dados: unknown, canal: string) => void;
 type OuvinteErro = (erro: ErroCanal) => void;
 
 /** Um WebSocket por aba, multiplexado por canal (contrato v1, "Tempo real"). */
@@ -75,7 +81,7 @@ export class ClienteTempoReal {
 
   assinar<C extends Canal>(
     canal: C,
-    ouvinte: (dados: DadosDoCanal<C>) => void,
+    ouvinte: (dados: DadosDoCanal<C>, canal: C) => void,
     aoErro?: (erro: ErroCanal) => void,
   ): () => void {
     let conjunto = this.ouvintes.get(canal);
@@ -171,7 +177,7 @@ export class ClienteTempoReal {
         return;
       }
       const conjunto = this.ouvintes.get(canal);
-      if (conjunto) for (const fn of [...conjunto]) fn(dados);
+      if (conjunto) for (const fn of [...conjunto]) fn(dados, canal);
     };
     s.onerror = () => {};
     s.onclose = (ev) => {

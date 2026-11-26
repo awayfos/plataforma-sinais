@@ -17,13 +17,21 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import type { Candle, Desenho, IndicadoresGrafico, TempoGrafico } from "@/lib/api/tipos";
-import { TEMPOS_DIARIOS, legendaVisivel, numero, tempoDoGrafico } from "@/lib/candles";
-import { formatarPreco } from "@/lib/formato";
-import { bollinger, ema, macd, rsi, vwap, type Serie } from "@/lib/indicadores";
+import { AgrupadorQuadros } from "@/lib/agrupador";
+import type { Candle, CandleAoVivo, Desenho, IndicadoresGrafico, TempoGrafico } from "@/lib/api/tipos";
+import { TEMPOS_DIARIOS, duracaoTempo, legendaVisivel, numero, tempoDoGrafico } from "@/lib/candles";
+import { formatarContagemVela, formatarPreco } from "@/lib/formato";
+import type { CandleNumerico, Serie } from "@/lib/indicadores";
+import { IndicadoresIncrementais } from "@/lib/indicadoresIncrementais";
+import { publicarPreco } from "@/lib/precos";
+import { agoraServidor } from "@/lib/relogio";
+import { SerieAoVivo } from "@/lib/serieAoVivo";
+import type { Canal } from "@/lib/ws/cliente";
+import { useCanal } from "@/lib/ws/ProvedorTempoReal";
 import { PrimitivaZonas } from "./primitivaZona";
 
 export type Ferramenta = "cursor" | "linha" | "zona";
+type CanalCandles = Extract<Canal, `candles:${string}`>;
 
 const paraTempo = (ms: number, tempo: TempoGrafico) => tempoDoGrafico(ms, tempo) as UTCTimestamp;
 
@@ -48,6 +56,26 @@ function linha(serie: Serie, tempos: UTCTimestamp[]) {
   return serie.map((v, i) => (v === null ? { time: tempos[i]! } : { time: tempos[i]!, value: v }));
 }
 
+function numerico(k: Candle): CandleNumerico {
+  return { t: k.t, h: numero(k.h), l: numero(k.l), c: numero(k.c), v: numero(k.v) };
+}
+
+function barra(k: Candle, time: UTCTimestamp) {
+  return { time, open: numero(k.o), high: numero(k.h), low: numero(k.l), close: numero(k.c) };
+}
+
+function barraVolume(k: Candle, time: UTCTimestamp) {
+  return {
+    time,
+    value: numero(k.v),
+    color: numero(k.c) >= numero(k.o) ? "rgba(38, 181, 140, 0.32)" : "rgba(240, 97, 109, 0.32)",
+  };
+}
+
+function corHist(h: number) {
+  return h >= 0 ? "rgba(38, 181, 140, 0.6)" : "rgba(240, 97, 109, 0.6)";
+}
+
 interface SeriesIndicadores {
   lista: ISeriesApi<SeriesType>[];
   ema9?: ISeriesApi<"Line">;
@@ -62,42 +90,42 @@ interface SeriesIndicadores {
   macdSinal?: ISeriesApi<"Line">;
 }
 
-function preencherIndicadores(s: SeriesIndicadores, candles: Candle[], tempo: TempoGrafico): void {
-  const tempos = candles.map((k) => paraTempo(k.t, tempo));
-  const fechamentos = candles.map((k) => numero(k.c));
-  if (s.ema9 && s.ema21) {
-    s.ema9.setData(linha(ema(fechamentos, 9), tempos));
-    s.ema21.setData(linha(ema(fechamentos, 21), tempos));
-  }
-  if (s.bbSup && s.bbMedia && s.bbInf) {
-    const b = bollinger(fechamentos, 20, 2);
-    s.bbSup.setData(linha(b.superior, tempos));
-    s.bbMedia.setData(linha(b.media, tempos));
-    s.bbInf.setData(linha(b.inferior, tempos));
-  }
-  if (s.vwap) {
-    s.vwap.setData(linha(vwap(candles.map((k) => ({ t: k.t, h: numero(k.h), l: numero(k.l), c: numero(k.c), v: numero(k.v) }))), tempos));
-  }
-  if (s.rsi) s.rsi.setData(linha(rsi(fechamentos, 14), tempos));
-  if (s.macdHist && s.macd && s.macdSinal) {
-    const m = macd(fechamentos);
-    s.macd.setData(linha(m.macd, tempos));
-    s.macdSinal.setData(linha(m.sinal, tempos));
-    s.macdHist.setData(
-      m.histograma.map((h, i) =>
-        h === null
-          ? { time: tempos[i]! }
-          : { time: tempos[i]!, value: h, color: h >= 0 ? "rgba(38, 181, 140, 0.6)" : "rgba(240, 97, 109, 0.6)" },
-      ),
-    );
-  }
+/** Carga completa (histórico novo): setData em todas as séries de indicadores. */
+function preencherIndicadores(s: SeriesIndicadores, inc: IndicadoresIncrementais, tempos: UTCTimestamp[]): void {
+  const x = inc.series();
+  s.ema9?.setData(linha(x.ema9, tempos));
+  s.ema21?.setData(linha(x.ema21, tempos));
+  s.bbSup?.setData(linha(x.bbSup, tempos));
+  s.bbMedia?.setData(linha(x.bbMedia, tempos));
+  s.bbInf?.setData(linha(x.bbInf, tempos));
+  s.vwap?.setData(linha(x.vwap, tempos));
+  s.rsi?.setData(linha(x.rsi, tempos));
+  s.macd?.setData(linha(x.macd, tempos));
+  s.macdSinal?.setData(linha(x.macdSinal, tempos));
+  s.macdHist?.setData(x.macdHist.map((h, i) => (h === null ? { time: tempos[i]! } : { time: tempos[i]!, value: h, color: corHist(h) })));
+}
+
+/** Tick: só o ponto da barra tocada (update), sem setData. */
+function atualizarIndicadores(s: SeriesIndicadores, inc: IndicadoresIncrementais, i: number, time: UTCTimestamp): void {
+  const p = inc.ponto(i);
+  const up = (serie: ISeriesApi<"Line"> | undefined, v: number | null) => serie?.update(v === null ? { time } : { time, value: v });
+  up(s.ema9, p.ema9);
+  up(s.ema21, p.ema21);
+  up(s.bbSup, p.bbSup);
+  up(s.bbMedia, p.bbMedia);
+  up(s.bbInf, p.bbInf);
+  up(s.vwap, p.vwap);
+  up(s.rsi, p.rsi);
+  up(s.macd, p.macd);
+  up(s.macdSinal, p.macdSinal);
+  s.macdHist?.update(p.macdHist === null ? { time } : { time, value: p.macdHist, color: corHist(p.macdHist) });
 }
 
 const SEM_ROTULO = { lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false } as const;
 
 export function Grafico({
   candles,
-  chave,
+  canal,
   tempo,
   indicadores,
   paineis,
@@ -106,9 +134,10 @@ export function Grafico({
   aoCriarDesenho,
   rotulo,
 }: {
+  /** Histórico fechado (REST). Os ticks ao vivo chegam pelo canal e são aplicados direto no gráfico. */
   candles: Candle[];
-  /** Identifica a série exibida (ativo:tempo), para não misturar a legenda entre séries. */
-  chave: string;
+  /** `candles:SIMB:tg` da série exibida (também identifica a série para a legenda). */
+  canal: CanalCandles | null;
   tempo: TempoGrafico;
   indicadores: IndicadoresGrafico;
   /** RSI e MACD em painéis próprios (modo Avançado). */
@@ -118,30 +147,108 @@ export function Grafico({
   aoCriarDesenho: (d: Desenho) => void;
   rotulo: string;
 }) {
+  const raiz = useRef<HTMLDivElement>(null);
   const caixa = useRef<HTMLDivElement>(null);
   const grafico = useRef<IChartApi | null>(null);
   const velas = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volume = useRef<ISeriesApi<"Histogram"> | null>(null);
   const zonas = useRef<PrimitivaZonas | null>(null);
   const linhas = useRef<IPriceLine[]>([]);
+  const linhaPreco = useRef<IPriceLine | null>(null);
   const ind = useRef<SeriesIndicadores>({ lista: [] });
-  const carregado = useRef<{ chave: string; primeiro: number; n: number } | null>(null);
-  const porTempo = useRef(new Map<number, Candle>());
+  const agrupador = useRef<AgrupadorQuadros<{ canal: string; tick: CandleAoVivo }> | null>(null);
+  const canalCarregado = useRef<string | null>(null);
+  const focoRef = useRef<{ chave: string; candle: Candle } | null>(null);
+  const legenda = useRef<{ o: HTMLSpanElement | null; h: HTMLSpanElement | null; l: HTMLSpanElement | null; c: HTMLSpanElement | null }>({
+    o: null,
+    h: null,
+    l: null,
+    c: null,
+  });
+  const canalRef = useRef(canal);
+  const tempoRef = useRef(tempo);
   const ferramentaRef = useRef(ferramenta);
   const aoCriarRef = useRef(aoCriarDesenho);
   const pendenteRef = useRef<number | null>(null);
   const [pendente, setPendente] = useState<number | null>(null);
-  const [foco, setFoco] = useState<{ chave: string; candle: Candle } | null>(null);
+  const [serie] = useState(() => new SerieAoVivo());
+  const [inc] = useState(() => new IndicadoresIncrementais());
   const diario = TEMPOS_DIARIOS.includes(tempo);
-  const ultimos = useRef<{ candles: Candle[]; tempo: TempoGrafico }>({ candles: [], tempo: "1m" });
-  const chaveRef = useRef(chave);
 
   useEffect(() => {
-    chaveRef.current = chave;
+    canalRef.current = canal;
+    tempoRef.current = tempo;
     ferramentaRef.current = ferramenta;
     aoCriarRef.current = aoCriarDesenho;
     if (ferramenta !== "zona") pendenteRef.current = null;
   });
+
+  /** Legenda OHLC: candle do cursor (se for desta série) ou o último. Escrita direto no DOM. */
+  function desenharLegenda() {
+    const k = legendaVisivel(focoRef.current, canalRef.current ?? "", serie.candles);
+    const cor = !k || numero(k.c) >= numero(k.o) ? "text-alta" : "text-baixa";
+    const l = legenda.current;
+    for (const [campo, el] of [
+      ["o", l.o],
+      ["h", l.h],
+      ["l", l.l],
+      ["c", l.c],
+    ] as const) {
+      if (!el) continue;
+      el.textContent = k ? formatarPreco(k[campo]) : "—";
+      el.className = cor;
+    }
+  }
+
+  /** Rótulo do último preço no eixo: cor da barra (alta/baixa) e contagem até o fechamento. */
+  function atualizarRotuloPreco() {
+    const v = velas.current;
+    const ultimo = serie.candles.at(-1);
+    if (!v || !ultimo) return;
+    const dur = duracaoTempo(tempoRef.current);
+    // Barra fechada sem formação ainda: a próxima fecha uma duração depois.
+    const fecha = ultimo.t + (ultimo.fechado ? 2 : 1) * dur;
+    const title = formatarContagemVela(fecha - agoraServidor(Date.now()));
+    const color = numero(ultimo.c) >= numero(ultimo.o) ? COR.alta : COR.baixa;
+    const price = numero(ultimo.c);
+    if (!linhaPreco.current) {
+      linhaPreco.current = v.createPriceLine({ price, color, lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: true, title });
+    } else {
+      linhaPreco.current.applyOptions({ price, color, title });
+    }
+  }
+
+  /** Depois de qualquer mudança na última barra: preço, legenda, atributos para testes e preço ao vivo. */
+  function aposMudanca() {
+    const ultimo = serie.candles.at(-1);
+    atualizarRotuloPreco();
+    desenharLegenda();
+    const el = raiz.current;
+    if (el) {
+      el.dataset.barras = String(serie.candles.length);
+      el.dataset.ultimoFechamento = ultimo?.c ?? "";
+    }
+    const simbolo = serie.canal?.split(":")[1];
+    if (simbolo && ultimo) publicarPreco(simbolo, ultimo.c);
+  }
+
+  /** Um quadro de ticks: aplica na série e atualiza só as barras tocadas. */
+  function descarregar(itens: { canal: string; tick: CandleAoVivo }[]) {
+    const v = velas.current;
+    const vol = volume.current;
+    if (!v || !vol) return;
+    const tocados = serie.aplicarLote(itens);
+    if (tocados.length === 0) return;
+    for (const i of tocados) {
+      const k = serie.candles[i]!;
+      const time = paraTempo(k.t, tempoRef.current);
+      v.update(barra(k, time));
+      vol.update(barraVolume(k, time));
+      const r = inc.aplicar(numerico(k));
+      atualizarIndicadores(ind.current, inc, r.indice, time);
+    }
+    aposMudanca();
+  }
 
   // Criação do gráfico (uma vez).
   useEffect(() => {
@@ -173,7 +280,9 @@ export function Grafico({
       borderVisible: false,
       wickUpColor: COR.alta,
       wickDownColor: COR.baixa,
-      priceLineColor: "#3a4556",
+      // Linha e rótulo do último preço são desenhados por nós (cor da barra + contagem até o fechamento).
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     const vol = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
@@ -184,6 +293,7 @@ export function Grafico({
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     const z = new PrimitivaZonas();
     v.attachPrimitive(z);
+
 
     const clique = (p: MouseEventParams<Time>) => {
       const modo = ferramentaRef.current;
@@ -203,9 +313,14 @@ export function Grafico({
         aoCriarRef.current({ id: novoId(), tipo: "zona", de: Math.min(inicio, valor), ate: Math.max(inicio, valor) });
       }
     };
+    const porTempo = (time: Time | undefined) => {
+      if (time === undefined) return undefined;
+      return serie.candles.find((k) => paraTempo(k.t, tempoRef.current) === (time as number));
+    };
     const mover = (p: MouseEventParams<Time>) => {
-      const candle = p.time === undefined ? undefined : porTempo.current.get(p.time as number);
-      setFoco(candle ? { chave: chaveRef.current, candle } : null);
+      const candle = porTempo(p.time);
+      focoRef.current = candle ? { chave: canalRef.current ?? "", candle } : null;
+      desenharLegenda();
     };
     chart.subscribeClick(clique);
     chart.subscribeCrosshairMove(mover);
@@ -214,7 +329,11 @@ export function Grafico({
     velas.current = v;
     volume.current = vol;
     zonas.current = z;
+    const ag = new AgrupadorQuadros<{ canal: string; tick: CandleAoVivo }>((itens) => descarregar(itens));
+    agrupador.current = ag;
     return () => {
+      ag.descartar();
+      agrupador.current = null;
       chart.unsubscribeClick(clique);
       chart.unsubscribeCrosshairMove(mover);
       chart.remove();
@@ -223,9 +342,11 @@ export function Grafico({
       volume.current = null;
       zonas.current = null;
       linhas.current = [];
+      linhaPreco.current = null;
       ind.current = { lista: [] };
-      carregado.current = null;
+      canalCarregado.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Séries dos indicadores (recriadas quando a seleção muda).
@@ -268,43 +389,41 @@ export function Grafico({
     const panes = chart.panes();
     for (let i = 1; i < panes.length; i++) panes[i]?.setHeight(110);
     ind.current = novo;
-    preencherIndicadores(novo, ultimos.current.candles, ultimos.current.tempo);
+    preencherIndicadores(novo, inc, serie.candles.map((k) => paraTempo(k.t, tempoRef.current)));
   }, [indicadores.ema, indicadores.bollinger, indicadores.vwap, indicadores.rsi, indicadores.macd, paineis, diario]);
 
-  // Dados: candles, volume e indicadores.
+
+  // Histórico (REST): carga completa. Também roda após reconectar (o Terminal recarrega o REST).
   useEffect(() => {
     const chart = grafico.current;
     const v = velas.current;
     const vol = volume.current;
-    if (!chart || !v || !vol) return;
-    const tempos = candles.map((k) => paraTempo(k.t, tempo));
-    const barras = candles.map((k, i) => ({ time: tempos[i]!, open: numero(k.o), high: numero(k.h), low: numero(k.l), close: numero(k.c) }));
-    const volumes = candles.map((k, i) => ({
-      time: tempos[i]!,
-      value: numero(k.v),
-      color: numero(k.c) >= numero(k.o) ? "rgba(38, 181, 140, 0.32)" : "rgba(240, 97, 109, 0.32)",
-    }));
-    porTempo.current = new Map(candles.map((k, i) => [tempos[i]!, k]));
-
-    const anterior = carregado.current;
-    const primeiro = candles[0]?.t ?? -1;
-    const incremental =
-      anterior !== null && anterior.chave === chave && anterior.primeiro === primeiro && candles.length > 0 && (candles.length === anterior.n || candles.length === anterior.n + 1);
-    if (incremental) {
-      v.update(barras.at(-1)!);
-      vol.update(volumes.at(-1)!);
-    } else {
-      v.setData(barras);
-      vol.setData(volumes);
-      if ((anterior?.chave !== chave || anterior?.primeiro !== primeiro) && candles.length > 0) {
-        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, candles.length - 140), to: candles.length + 4 });
-      }
+    if (!chart || !v || !vol || !canal) return;
+    serie.carregar(canal, candles);
+    const tempos = serie.candles.map((k) => paraTempo(k.t, tempo));
+    v.setData(serie.candles.map((k, i) => barra(k, tempos[i]!)));
+    vol.setData(serie.candles.map((k, i) => barraVolume(k, tempos[i]!)));
+    inc.carregar(serie.candles.map(numerico));
+    preencherIndicadores(ind.current, inc, tempos);
+    if (canalCarregado.current !== canal && serie.candles.length > 0) {
+      const n = serie.candles.length;
+      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 140), to: n + 4 });
     }
-    carregado.current = { chave, primeiro, n: candles.length };
+    canalCarregado.current = canal;
+    focoRef.current = null;
+    aposMudanca();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, canal, tempo]);
 
-    ultimos.current = { candles, tempo };
-    preencherIndicadores(ind.current, candles, tempo);
-  }, [candles, tempo, chave]);
+  // Ticks ao vivo: enfileirados e aplicados uma vez por quadro (sem re-render do React).
+  useCanal(canal, (tick, origem) => agrupador.current?.enfileirar({ canal: origem, tick }));
+
+  // Contagem até o fechamento no rótulo do preço.
+  useEffect(() => {
+    const id = setInterval(() => atualizarRotuloPreco(), 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Desenhos: linhas horizontais (price lines) e zonas (primitiva).
   useEffect(() => {
@@ -321,6 +440,7 @@ export function Grafico({
     );
   }, [desenhos]);
 
+
   function zoom(fator: number) {
     const ts = grafico.current?.timeScale();
     const r = ts?.getVisibleLogicalRange();
@@ -330,22 +450,18 @@ export function Grafico({
     ts.setVisibleLogicalRange({ from: centro - meia, to: centro + meia });
   }
 
-  const vela = legendaVisivel(foco, chave, candles);
-  const subiu = vela ? numero(vela.c) >= numero(vela.o) : true;
 
   return (
-    <div className="relative flex min-h-[340px] flex-1 flex-col">
+    <div ref={raiz} data-testid="grafico" className="relative flex min-h-[340px] flex-1 flex-col">
       <div className="pointer-events-none absolute top-2 left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
-        {vela && (
-          <span className="num text-apagado" data-testid="legenda-ohlc">
-            A <span className={subiu ? "text-alta" : "text-baixa"}>{formatarPreco(vela.o)}</span> M{" "}
-            <span className={subiu ? "text-alta" : "text-baixa"}>{formatarPreco(vela.h)}</span> m{" "}
-            <span className={subiu ? "text-alta" : "text-baixa"}>{formatarPreco(vela.l)}</span> F{" "}
-            <span className={subiu ? "text-alta" : "text-baixa"} data-testid="ultimo-fechamento">
-              {formatarPreco(vela.c)}
-            </span>
+        <span className="num text-apagado" data-testid="legenda-ohlc">
+          A <span ref={(el) => void (legenda.current.o = el)}>—</span> M{" "}
+          <span ref={(el) => void (legenda.current.h = el)}>—</span> m{" "}
+          <span ref={(el) => void (legenda.current.l = el)}>—</span> F{" "}
+          <span ref={(el) => void (legenda.current.c = el)} data-testid="ultimo-fechamento">
+            —
           </span>
-        )}
+        </span>
         {indicadores.ema && (
           <span className="text-apagado">
             <span className="text-ouro">EMA 9</span> · <span className="text-info">EMA 21</span>

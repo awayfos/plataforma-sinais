@@ -70,7 +70,7 @@ export function useReconexoes(): number {
 /** Assina um canal enquanto o componente estiver montado (null = nenhum). */
 export function useCanal<C extends Canal>(
   canal: C | null,
-  ouvinte: (dados: DadosDoCanal<C>) => void,
+  ouvinte: (dados: DadosDoCanal<C>, canal: C) => void,
   aoErro?: (erro: ErroCanal) => void,
 ): void {
   const { cliente } = useContext(Contexto);
@@ -84,7 +84,7 @@ export function useCanal<C extends Canal>(
     if (!cliente || !canal) return;
     return cliente.assinar(
       canal,
-      (dados) => ref.current(dados),
+      (dados, origem) => ref.current(dados, origem),
       (erro) => refErro.current?.(erro),
     );
   }, [cliente, canal]);
