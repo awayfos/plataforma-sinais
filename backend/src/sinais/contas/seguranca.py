@@ -43,7 +43,12 @@ class CifraSegredos:
         if not id_chave or ":" in id_chave:
             raise ValueError("identificador de chave inválido")
         self._aes = AESGCM(chave)
+        self._chave = chave
         self._id = id_chave
+
+    def derivar(self, rotulo: str) -> bytes:
+        """Subchave de 32 bytes para outro uso (HMAC), sem reutilizar a chave da cifra."""
+        return hmac.new(self._chave, rotulo.encode(), hashlib.sha256).digest()
 
     @classmethod
     def de_base64(cls, texto: str, id_chave: str = "k1") -> CifraSegredos:
@@ -63,3 +68,33 @@ class CifraSegredos:
             return self._aes.decrypt(bruto[:_NONCE], bruto[_NONCE:], contexto.encode()).decode()
         except (InvalidTag, ValueError) as erro:
             raise ErroCifra("segredo cifrado inválido") from erro
+
+
+class AssinadorDispositivos:
+    """Cookie "dispositivo confiável": ``v1.<expira_ms>.<nonce>.<hmac>``, amarrado ao e-mail.
+
+    Emitido em todo login bem-sucedido; quem o apresenta não é barrado pelo teto global de
+    falhas do e-mail (ataque distribuído), só pelo bloqueio por (e-mail, IP)."""
+
+    def __init__(self, chave: bytes) -> None:
+        if len(chave) < 32:
+            raise ValueError("a chave do assinador deve ter ao menos 32 bytes")
+        self._chave = chave
+
+    def _mac(self, email: str, corpo: str) -> str:
+        bruto = hmac.new(self._chave, f"{email}|{corpo}".encode(), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(bruto).rstrip(b"=").decode()
+
+    def emitir(self, email: str, expira_ms: int) -> str:
+        corpo = f"v1.{expira_ms}.{secrets.token_urlsafe(9)}"
+        return f"{corpo}.{self._mac(email, corpo)}"
+
+    def valido(self, token: str | None, email: str, agora_ms: int) -> bool:
+        if not token or len(token) > 256:
+            return False
+        partes = token.split(".")
+        if len(partes) != 4 or partes[0] != "v1" or not partes[1].isdigit():
+            return False
+        if int(partes[1]) <= agora_ms:
+            return False
+        return iguais(partes[3], self._mac(email, ".".join(partes[:3])))

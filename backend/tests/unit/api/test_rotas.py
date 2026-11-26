@@ -304,6 +304,9 @@ def test_admin_encerra_assinatura_e_o_cliente_perde_o_acesso_na_hora() -> None:
     uid = ana.get("/api/eu").json()["id"]
     a = asyncio.run(app.amb.repo.assinatura_atual(uid, T0_CONTAS))
     assert a is not None
+    # o painel acha o id da assinatura vigente na lista de usuários (botão "Encerrar")
+    linha_ana = next(u for u in adm.get("/api/admin/usuarios").json() if u["id"] == uid)
+    assert linha_ana["assinatura_id"] == a.id
     assert adm.post(f"/api/admin/assinaturas/{a.id}/encerrar").status_code == 403  # sem CSRF
     r = adm.post(f"/api/admin/assinaturas/{a.id}/encerrar", headers=csrf(adm))
     assert r.status_code == 200 and r.json()["fim"] == T0_CONTAS
@@ -349,3 +352,49 @@ def test_json_aninhado_demais_da_422() -> None:
         headers={**csrf(c), "content-type": "application/json"},
     )
     assert r.status_code == 422 and erro_de(r)["codigo"] in ("validacao", "layout_invalido")
+
+
+def test_login_emite_cookie_de_dispositivo_que_escapa_do_teto_global() -> None:
+    from sinais.contas.limites import PoliticaLogin
+    from sinais.contas.servico import ErroConta, ParametrosContas
+
+    from ..contas.dubles import S, codigo_totp
+
+    app = montar(ParametrosContas(politica=PoliticaLogin(falhas_globais_email=3)))
+    asyncio.run(admin(app.amb))
+    c = app.cliente()
+    r = entrar_admin(app, c)
+    disp = next(x for x in r.headers.get_list("set-cookie") if x.startswith("sinais_dispositivo="))
+    for k in ("HttpOnly", "Secure", "SameSite=strict", "Path=/api/auth"):
+        assert k.lower() in disp.lower(), disp
+
+    async def atacar() -> None:
+        for i in range(3):
+            try:
+                await app.amb.servico.login("admin@exemplo.com", "x" * 10, None, f"6.6.6.{i}", "u")
+            except ErroConta:
+                pass
+
+    asyncio.run(atacar())
+    app.amb.relogio.avancar(31 * S)
+    codigo = codigo_totp(app.amb.relogio.agora_ms())
+    outro = app.cliente()  # navegador sem o cookie: barrado pelo teto global
+    r = entrar(outro, "admin@exemplo.com", "senha-admin-123", codigo)
+    assert r.status_code == 423 and erro_de(r)["codigo"] == "conta_bloqueada"
+    c.post("/api/auth/logout", headers=csrf(c))  # sair não apaga o dispositivo confiável
+    r = entrar(c, "admin@exemplo.com", "senha-admin-123", codigo)
+    assert r.status_code == 200, r.text
+
+
+def test_historico_sem_simbolo_devolve_todos_os_ativos_do_plano() -> None:
+    app = preparar(recursos=SO_BTC)
+    c = app.cliente()
+    entrar(c, "ana@exemplo.com", SENHA)
+    assert c.get("/api/sinais/historico").status_code == 200
+    assert c.get("/api/sinais/historico").json() == []
+    assert c.get("/api/sinais/historico?inicio=1&fim=2").json() == []
+    r = c.get("/api/sinais/historico?inicio=10&fim=5")
+    assert r.status_code == 422 and erro_de(r)["codigo"] == "periodo_invalido"
+    # um ativo fora do plano continua 403 quando pedido explicitamente
+    r = c.get("/api/sinais/historico?simbolo=ETHUSDT")
+    assert r.status_code == 403 and erro_de(r)["codigo"] == "ativo_nao_incluido"

@@ -12,6 +12,7 @@ from sinais.contas.contexto import Contexto
 
 COOKIE_SESSAO = "sinais_sessao"
 COOKIE_CSRF = "sinais_csrf"
+COOKIE_DISPOSITIVO = "sinais_dispositivo"
 CABECALHO_CSRF = "X-CSRF-Token"
 
 

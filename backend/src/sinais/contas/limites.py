@@ -1,16 +1,33 @@
 """Limites de tentativas (rate limit) e bloqueio progressivo de login (design §15).
 
 O bloqueio progressivo vale por (e-mail, IP): um atacante não trava o dono da conta, que entra
-de outro IP. Um teto global por e-mail, bem mais alto, segura o ataque distribuído. As chaves
-usam hash, existente ou não o e-mail: quem tenta adivinhar contas recebe as mesmas respostas.
+de outro IP. Um teto global por e-mail, bem mais alto, segura o ataque distribuído; um
+dispositivo em que a conta já entrou (cookie assinado "dispositivo confiável") não é barrado por
+esse teto, só pelo bloqueio do seu próprio IP. As chaves usam hash, existente ou não o e-mail:
+quem tenta adivinhar contas recebe as mesmas respostas. IPv6 conta por bloco /64 (um único
+cliente costuma ter o /64 inteiro).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv6Address, ip_address, ip_network
 from typing import Protocol
 
 from sinais.core.tempo import InstanteMs, Relogio
+
+
+def chave_ip(ip: str) -> str:
+    """IP usado nos contadores: IPv6 vira o bloco /64; IPv4 mapeado em IPv6 vira o IPv4."""
+    try:
+        end = ip_address(ip.strip())
+    except ValueError:
+        return ip
+    if isinstance(end, IPv6Address):
+        if end.ipv4_mapped is not None:
+            return str(end.ipv4_mapped)
+        return str(ip_network(f"{end}/64", strict=False))
+    return str(end)
 
 
 class ContadorLimites(Protocol):
