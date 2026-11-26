@@ -163,6 +163,8 @@ export interface UsuarioAdmin {
   papel?: Papel;
   status?: StatusUsuario;
   assinatura?: Assinatura | null;
+  /** Id da assinatura vigente (para encerrar); null sem assinatura. */
+  assinatura_id?: Id | null;
   criado_em?: Ms;
 }
 

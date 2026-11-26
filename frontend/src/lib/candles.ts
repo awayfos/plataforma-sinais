@@ -51,3 +51,14 @@ const DURACAO: Record<TempoGrafico, number> = {
 export function duracaoTempo(tempo: TempoGrafico): number {
   return DURACAO[tempo];
 }
+
+/**
+ * Próximo fechamento de barra depois de `agora`, a partir da barra mais recente (de abertura `t`). Sem tick
+ * novo (mercado parado, oficial atrasado), a contagem avança sozinha para o próximo período pelo relógio,
+ * em vez de parar em 00:00.
+ */
+export function proximoFechamento(t: number, duracao: number, agora: number): number {
+  const fecha = t + duracao;
+  if (agora < fecha) return fecha;
+  return fecha + (Math.floor((agora - fecha) / duracao) + 1) * duracao;
+}

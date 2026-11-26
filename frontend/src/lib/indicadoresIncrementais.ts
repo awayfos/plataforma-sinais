@@ -1,5 +1,7 @@
 // Indicadores do gráfico calculados barra a barra: carregar() percorre a série uma vez; aplicar() recalcula
-// só a última posição (tick em formação) ou anexa uma nova, a partir do estado da barra anterior.
+// só a última posição (tick em formação) ou anexa uma nova, a partir do estado da barra anterior. Uma barra
+// anterior à última (1m oficial que chega depois dos primeiros ticks da barra seguinte) é recalculada dali
+// até o fim, porque EMA, RSI e MACD dependem das barras anteriores.
 // Mesmos parâmetros e resultados de lib/indicadores.ts (conferido nos testes).
 import type { CandleNumerico, Serie } from "./indicadores";
 
@@ -53,15 +55,26 @@ export class IndicadoresIncrementais {
     return this.s;
   }
 
-  /** Mesmo t da última barra → recalcula a última; t maior → anexa. Devolve o índice calculado. */
-  aplicar(c: CandleNumerico): { indice: number; nova: boolean } {
+  /**
+   * Mesmo t da última barra → recalcula a última; t maior → anexa; t de uma barra anterior → substitui e
+   * recalcula dali até o fim. Devolve o índice da barra e `desde`, a primeira posição recalculada (todas de
+   * `desde` até a última mudaram; `desde` = tamanho da série quando nada mudou).
+   */
+  aplicar(c: CandleNumerico): { indice: number; nova: boolean; desde: number } {
     const ultimo = this.k.at(-1);
     const nova = !ultimo || c.t > ultimo.t;
-    if (!nova && c.t < ultimo!.t) return { indice: this.k.length - 1, nova: false };
+    if (!nova && c.t < ultimo!.t) {
+      let j = this.k.length - 2;
+      while (j >= 0 && this.k[j]!.t > c.t) j--;
+      if (j < 0 || this.k[j]!.t !== c.t) return { indice: this.k.length - 1, nova: false, desde: this.k.length };
+      this.k[j] = c;
+      for (let x = j; x < this.k.length; x++) this.calcular(x);
+      return { indice: j, nova: false, desde: j };
+    }
     const i = nova ? this.k.length : this.k.length - 1;
     this.k[i] = c;
     this.calcular(i);
-    return { indice: i, nova };
+    return { indice: i, nova, desde: i };
   }
 
   ponto(i: number): { [K in keyof SeriesIndicadoras]: number | null } {
