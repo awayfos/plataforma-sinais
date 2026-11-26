@@ -59,3 +59,11 @@ def test_vencimento_depois_do_fim_dos_dados_vira_nan() -> None:
     assert fora.any()
     assert r.loc[fora, "alvo"].isna().all()
     assert r.loc[fora, "apertado"].isna().all()
+
+
+@pytest.mark.parametrize("exp", [Expiracao.M1, Expiracao.M5])
+def test_entrada_limitada_nos_rotulos(exp: Expiracao) -> None:
+    r = rotular_1s(DECISOES, EXNOVA.regras[exp], _precos(), semente=3, entrada_max_ms=10_000)
+    atraso = r["entrada_t"] - r["decisao"]
+    assert atraso.between(2_000, 10_000).all()
+    assert atraso.nunique() > 3

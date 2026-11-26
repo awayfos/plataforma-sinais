@@ -38,20 +38,26 @@ def rotular_1s(
     latencia_ms: int = 2000,
     semente: int = 0,
     limiar_apertado: float = 1e-4,
+    entrada_max_ms: int | None = None,
 ) -> pd.DataFrame:
     """Rótulo realista (design §13.1): entrada num segundo inteiro sorteado entre
     ``teto(decisao + latencia)`` e o prazo de compra do vencimento mirado na decisão; preços de
-    1 s. ``alvo`` como em ``rotular``; ``apertado`` = 1 se |vencimento − entrada| ≤
-    ``limiar_apertado`` x entrada (mesma regra do simulador), NaN sem preço."""
+    1 s (ou até ``decisao + entrada_max_ms``, se dado). ``alvo`` como em ``rotular``;
+    ``apertado`` = 1 se |vencimento − entrada| ≤ ``limiar_apertado`` x entrada (mesma regra
+    do simulador), NaN sem preço."""
     decisoes = np.asarray(decisoes, dtype="int64")
     venc = vencimentos(decisoes, regra)
     menor = -(-(decisoes + latencia_ms) // 1000)
-    maior = (venc - regra.corte_ms - 1) // 1000
+    prazo = venc - regra.corte_ms - 1
+    sem_janela = prazo // 1000 < menor
+    if entrada_max_ms is not None:
+        prazo = np.minimum(prazo, decisoes + entrada_max_ms)
+    maior = prazo // 1000
     rng = np.random.default_rng(semente)
     entrada = rng.integers(menor, np.maximum(maior, menor) + 1) * 1000
     pe = precos_1s.precos_em(entrada)
     pv = precos_1s.precos_em(venc)
-    sem_preco = np.isnan(pe) | np.isnan(pv) | (maior < menor)
+    sem_preco = np.isnan(pe) | np.isnan(pv) | sem_janela
     alvo = np.where(pv > pe, 1.0, np.where(pv < pe, 0.0, np.nan))
     apertado = (np.abs(pv - pe) <= limiar_apertado * pe).astype("float64")
     alvo[sem_preco] = np.nan

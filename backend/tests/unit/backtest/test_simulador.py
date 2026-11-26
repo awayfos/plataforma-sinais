@@ -78,3 +78,43 @@ def test_apertado_marcado() -> None:
     quase = SeriePrecos.de_quadro(quadro([100.0, 100.005, 100.005]), M)
     r = simular(sinais((T0 + M, 1)), quase, UM)
     assert bool(r["apertado"][0]) is True
+
+
+def _precos_1s(passo: float = 0.0, minutos: int = 10) -> SeriePrecos:
+    import numpy as np
+
+    c = 100 + passo * np.arange(minutos * 60)
+    idx = pd.Index(T0 + np.arange(len(c)) * 1000, name="abertura")
+    return SeriePrecos.de_quadro(pd.DataFrame({"o": c, "c": c}, index=idx), 1000)
+
+
+def test_entrada_limitada_fica_ate_decisao_mais_10s() -> None:
+    s = sinais(*[(T0 + i * 2 * M, 1) for i in range(1, 4)])
+    for semente in range(20):
+        r = simular(
+            s, _precos_1s(0.001), UM, entrada_aleatoria=True, semente=semente, entrada_max_ms=10_000
+        )
+        assert ((r["entrada_t"] - r["decisao"]) <= 10_000).all()
+        assert ((r["entrada_t"] - r["decisao"]) >= 2_000).all()
+
+
+def test_entrada_limitada_none_mantem_janela_inteira() -> None:
+    s = sinais(*[(T0 + i * 2 * M, 1) for i in range(1, 4)])
+    atrasos = set()
+    for semente in range(30):
+        r = simular(s, _precos_1s(0.001), UM, entrada_aleatoria=True, semente=semente)
+        atrasos |= set((r["entrada_t"] - r["decisao"]).tolist())
+    assert max(atrasos) > 10_000
+
+
+def test_tolerancia_de_preco_recusa_entrada_longe_do_preco_da_decisao() -> None:
+    # preço sobe 0,01 por segundo: na entrada (>= 2 s) já andou >= 0,02
+    s = sinais((T0 + M, 1), (T0 + 3 * M, 1)).assign(atr=[0.001, 10.0])
+    r = simular(s, _precos_1s(0.01), UM, entrada_aleatoria=True, semente=1, tolerancia_atr=1.0)
+    assert resultados(r) == ["FORA_DA_TOLERANCIA", "WIN"]
+
+
+def test_tolerancia_sem_atr_nao_bloqueia() -> None:
+    s = sinais((T0 + M, 1)).assign(atr=[float("nan")])
+    r = simular(s, _precos_1s(0.01), UM, entrada_aleatoria=True, tolerancia_atr=1.0)
+    assert resultados(r) == ["WIN"]
