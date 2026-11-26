@@ -288,3 +288,20 @@ def test_entrada_ruim_no_stream_nao_derruba_as_outras() -> None:
     assert distribuir_resposta(resposta, ultimos, d, None) == 1
     assert ultimos["candle.fechado"] == "3-0"
     assert a.fila.qsize() == 1
+
+
+def test_ipv4_mapeado_em_ipv6_vale_como_ipv4_no_proxy_e_no_ip_do_cliente() -> None:
+    from ipaddress import ip_network
+
+    from sinais.api.ws_canais import de_proxy_confiavel, ip_do_cliente
+
+    proxies = (ip_network("127.0.0.1/32"), ip_network("172.16.0.0/12"))
+    # socket dual-stack: o nginx/Next local aparece como ::ffff:127.0.0.1
+    assert de_proxy_confiavel("::ffff:127.0.0.1", proxies)
+    assert de_proxy_confiavel("::ffff:172.18.0.3", proxies)
+    assert not de_proxy_confiavel("::ffff:8.8.8.8", proxies)
+    xff = "6.6.6.6, ::ffff:198.51.100.7, ::ffff:172.18.0.3"
+    assert ip_do_cliente("::ffff:127.0.0.1", xff, proxies) == "198.51.100.7"
+    # o mesmo cliente com e sem o prefixo cai no mesmo contador de limites
+    assert ip_do_cliente("::ffff:203.0.113.9", None, ()) == "203.0.113.9"
+    assert ip_do_cliente("2001:db8::1", None, ()) == "2001:db8::1"

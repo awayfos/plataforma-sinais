@@ -164,10 +164,20 @@ type RedeIp = IPv4Network | IPv6Network
 
 
 def _endereco(texto: str | None) -> IPv4Address | IPv6Address | None:
+    """Endereço lido do texto; IPv4 mapeado em IPv6 (``::ffff:1.2.3.4``, comum em sockets
+    dual-stack) vira o IPv4, para casar com as redes de proxy e com os contadores de limite."""
     try:
-        return ip_address((texto or "").strip())
+        ip = ip_address((texto or "").strip())
     except ValueError:
         return None
+    if isinstance(ip, IPv6Address) and ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    return ip
+
+
+def _normalizado(texto: str | None) -> str | None:
+    ip = _endereco(texto)
+    return str(ip) if ip is not None else texto
 
 
 def de_proxy_confiavel(conexao: str | None, proxies: Sequence[RedeIp]) -> bool:
@@ -181,10 +191,11 @@ def ip_do_cliente(conexao: str | None, encaminhado: str | None, proxies: Sequenc
     confiáveis (Next, nginx) e fica com o primeiro endereço de fora. O que está à esquerda dele
     veio do cliente e pode ser forjado."""
     if not de_proxy_confiavel(conexao, proxies) or not encaminhado:
-        return (conexao or "desconhecido")[:64]
+        return (_normalizado(conexao) or "desconhecido")[:64]
     entradas = [e.strip() for e in encaminhado.split(",") if e.strip()]
     for entrada in reversed(entradas):
         ip = _endereco(entrada)
         if ip is None or not any(ip in rede for rede in proxies):
-            return entrada[:64]
-    return (entradas[0] if entradas else conexao or "desconhecido")[:64]
+            return (str(ip) if ip is not None else entrada)[:64]
+    primeiro = _normalizado(entradas[0]) if entradas else _normalizado(conexao)
+    return (primeiro or "desconhecido")[:64]
