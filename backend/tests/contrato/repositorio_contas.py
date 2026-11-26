@@ -208,7 +208,107 @@ def payouts_substituir_mantem_historico(fabrica: Fabrica) -> None:
     asyncio.run(caso())
 
 
+def tocar_e_revogar_sessao_nunca_ressuscitam(fabrica: Fabrica) -> None:
+    async def caso() -> None:
+        repo = await fabrica()
+        u = await repo.criar_usuario(novo_usuario())
+        await repo.criar_sessao(sessao(u.id, "h1", T0))
+        assert await repo.tocar_sessao("h1", T0 + 5) is True
+        assert (await repo.sessao("h1")).ultimo_uso == T0 + 5  # type: ignore[union-attr]
+        assert await repo.revogar_sessao("h1", T0 + 6, "logout") is True
+        assert await repo.revogar_sessao("h1", T0 + 7, "outro") is False
+        assert await repo.tocar_sessao("h1", T0 + 8) is False
+        s = await repo.sessao("h1")
+        assert s is not None and (s.revogada_em, s.motivo_revogacao, s.ultimo_uso) == (
+            T0 + 6,
+            "logout",
+            T0 + 5,
+        )
+        assert await repo.tocar_sessao("nao-existe", T0) is False
+
+    asyncio.run(caso())
+
+
+def revogar_excedentes_mantem_as_mais_novas(fabrica: Fabrica) -> None:
+    async def caso() -> None:
+        repo = await fabrica()
+        u = await repo.criar_usuario(novo_usuario())
+        for i, h in enumerate(("a", "b", "c")):
+            await repo.criar_sessao(sessao(u.id, h, T0 + i))
+        assert await repo.revogar_excedentes(u.id, 1, T0 + 10, "limite_sessoes") == 2
+        assert [s.token_hash for s in await repo.sessoes_ativas(u.id, T0 + 10)] == ["c"]
+        assert await repo.revogar_excedentes(u.id, 1, T0 + 11, "limite_sessoes") == 0
+
+    asyncio.run(caso())
+
+
+def passo_totp_so_avanca(fabrica: Fabrica) -> None:
+    async def caso() -> None:
+        repo = await fabrica()
+        u = await repo.criar_usuario(novo_usuario(papel=Papel.ADMIN))
+        assert await repo.registrar_passo_totp(u.id, 5) is True
+        assert await repo.registrar_passo_totp(u.id, 5) is False
+        assert await repo.registrar_passo_totp(u.id, 4) is False
+        assert await repo.registrar_passo_totp(u.id, 6) is True
+        assert (await repo.usuario_por_id(u.id)).totp_ultimo_passo == 6  # type: ignore[union-attr]
+
+    asyncio.run(caso())
+
+
+def atualizar_usuario_so_toca_as_colunas_pedidas(fabrica: Fabrica) -> None:
+    async def caso() -> None:
+        repo = await fabrica()
+        u = await repo.criar_usuario(novo_usuario())
+        outro = await repo.criar_usuario(novo_usuario("b@exemplo.com"))
+        await repo.atualizar_usuario(u.id, {"status": StatusUsuario.BLOQUEADO})
+        await repo.atualizar_usuario(u.id, {"senha_hash": "$argon2id$z", "nome": "Ana B"})
+        lido = await repo.usuario_por_id(u.id)
+        assert lido is not None
+        assert (lido.status, lido.senha_hash, lido.nome) == (
+            StatusUsuario.BLOQUEADO,
+            "$argon2id$z",
+            "Ana B",
+        )
+        with pytest.raises(ErroEmailDuplicado):
+            await repo.atualizar_usuario(u.id, {"email": outro.email})
+        with pytest.raises(ValueError):
+            await repo.atualizar_usuario(u.id, {"id": 99})
+        modo = await repo.atualizar_preferencias(u.id, Modo.AVANCADO, None)
+        assert modo is not None and (modo.modo, modo.layout, modo.status) == (
+            Modo.AVANCADO,
+            {},
+            StatusUsuario.BLOQUEADO,
+        )
+        lay = await repo.atualizar_preferencias(u.id, None, {"BTCUSDT": {"z": 1}})
+        assert lay is not None and (lay.modo, lay.layout) == (Modo.AVANCADO, {"BTCUSDT": {"z": 1}})
+
+    asyncio.run(caso())
+
+
+def encerrar_assinatura_antes_do_fim(fabrica: Fabrica) -> None:
+    async def caso() -> None:
+        repo = await fabrica()
+        u = await repo.criar_usuario(novo_usuario())
+        p = await repo.criar_plano(NovoPlano("Mensal", 30, 9900, RECURSOS, True))
+        a = await repo.criar_assinatura(u.id, p.id, T0, T0 + 30 * D, "manual", T0)
+        assert await repo.assinatura(a.id) == a
+        assert await repo.assinatura(a.id + 99) is None
+        e = await repo.encerrar_assinatura(a.id, T0 + D)
+        assert e is not None and e.fim == T0 + D
+        assert await repo.assinatura_atual(u.id, T0 + D) == e
+        again = await repo.encerrar_assinatura(a.id, T0 + 2 * D)  # já encerrada: não estica
+        assert again is not None and again.fim == T0 + D
+        assert await repo.encerrar_assinatura(a.id + 99, T0) is None
+
+    asyncio.run(caso())
+
+
 CASOS = [
+    tocar_e_revogar_sessao_nunca_ressuscitam,
+    revogar_excedentes_mantem_as_mais_novas,
+    passo_totp_so_avanca,
+    atualizar_usuario_so_toca_as_colunas_pedidas,
+    encerrar_assinatura_antes_do_fim,
     usuario_ida_e_volta,
     email_duplicado_recusado,
     salvar_usuario_grava_todos_os_campos,

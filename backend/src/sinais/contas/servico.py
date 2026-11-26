@@ -6,6 +6,7 @@ evento, o usuário (quando conhecido), o IP e o user agent.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass, replace
@@ -28,6 +29,9 @@ _DIA_MS = 86_400_000
 SENHA_MINIMA = 10
 SENHA_MAXIMA = 256
 LAYOUT_MAXIMO_BYTES = 64 * 1024
+LAYOUT_PROFUNDIDADE_MAXIMA = 16
+TROCAS_DE_SENHA_POR_SESSAO = 5
+JANELA_TROCA_SENHA_S = 900
 MSG_CREDENCIAIS = "E-mail ou senha incorretos."
 
 
@@ -60,6 +64,8 @@ class ParametrosContas:
     sessao_ociosa_ms: int = _DIA_MS
     sessoes_simultaneas: int = 1
     politica: PoliticaLogin = PoliticaLogin()
+    # Argon2id custa CPU e memória: roda em threads, no máximo ``hash_paralelo`` por vez.
+    hash_paralelo: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,8 +93,17 @@ class ServicoContas:
         self._contador = contador
         self.relogio = relogio
         self.params = params or ParametrosContas()
+        self._semaforo_hash = asyncio.Semaphore(self.params.hash_paralelo)
         # Hash de uma senha aleatória descartada: e-mail inexistente gasta o mesmo tempo.
         self._hash_ficticio = hasher.gerar(gerar_token())
+
+    async def verificar_hash(self, hash_: str, senha: str) -> bool:
+        async with self._semaforo_hash:
+            return await asyncio.to_thread(self.hasher.verificar, hash_, senha)
+
+    async def gerar_hash(self, senha: str) -> str:
+        async with self._semaforo_hash:
+            return await asyncio.to_thread(self.hasher.gerar, senha)
 
     # ------------------------------------------------------------------ login
     async def login(
@@ -96,7 +111,11 @@ class ServicoContas:
     ) -> ResultadoLogin:
         agora = self.relogio.agora_ms()
         email = normalizar_email(email)
-        chave = hashlib.sha256(email.encode()).hexdigest()
+        # Bloqueio por (e-mail, IP): quem erra a senha de outra pessoa trava só a si mesmo.
+        # Um teto global por e-mail, bem mais alto, segura o ataque distribuído em vários IPs.
+        # As chaves usam hash, existente ou não o e-mail (sem enumeração de contas).
+        chave_email = hashlib.sha256(email.encode()).hexdigest()
+        chave = hashlib.sha256(f"{email}|{ip}".encode()).hexdigest()
         pol = self.params.politica
         n_ip = await self._contador.incrementar(f"login:ip:{ip}", pol.janela_s)
         n_email = await self._contador.incrementar(f"login:email:{chave}", pol.janela_s)
@@ -108,6 +127,9 @@ class ServicoContas:
                 429, "muitas_tentativas", "Muitas tentativas. Aguarde um minuto e tente de novo."
             )
         bloqueio = await self._contador.ler(f"login:bloqueio:{chave}")
+        global_ = await self._contador.ler(f"login:bloqueio_global:{chave_email}")
+        if global_ is not None and (bloqueio is None or int(global_) > int(bloqueio)):
+            bloqueio = global_
         if bloqueio is not None and int(bloqueio) > agora:
             await self.repo.registrar_acesso(uid, "login_bloqueado", ip, user_agent, agora)
             minutos = max(1, -(-(int(bloqueio) - agora) // _MINUTO_MS))
@@ -117,10 +139,10 @@ class ServicoContas:
                 f"Acesso bloqueado por excesso de tentativas. Tente de novo em {minutos} min.",
             )
         if usuario is None:
-            self.hasher.verificar(self._hash_ficticio, senha)
-            await self._falha(chave, None, ip, user_agent, agora)
-        elif not self.hasher.verificar(usuario.senha_hash, senha):
-            await self._falha(chave, usuario.id, ip, user_agent, agora)
+            await self.verificar_hash(self._hash_ficticio, senha)
+            await self._falha(chave, chave_email, None, ip, user_agent, agora)
+        elif not await self.verificar_hash(usuario.senha_hash, senha):
+            await self._falha(chave, chave_email, usuario.id, ip, user_agent, agora)
         if usuario.status is StatusUsuario.DESATIVADO:
             await self.repo.registrar_acesso(usuario.id, "login_desativado", ip, user_agent, agora)
             raise ErroConta(401, "credenciais_invalidas", MSG_CREDENCIAIS)
@@ -128,16 +150,26 @@ class ServicoContas:
             await self.repo.registrar_acesso(usuario.id, "login_bloqueado", ip, user_agent, agora)
             raise ErroConta(423, "conta_bloqueada", "Conta bloqueada. Fale com o suporte.")
         if usuario.papel is Papel.ADMIN:
-            usuario = await self._verificar_totp(usuario, totp, chave, ip, user_agent, agora)
+            usuario = await self._verificar_totp(
+                usuario, totp, chave, chave_email, ip, user_agent, agora
+            )
         await self._contador.apagar(f"login:falhas:{chave}")
         await self._contador.apagar(f"login:bloqueio:{chave}")
         if self.hasher.precisa_rehash(usuario.senha_hash):
-            usuario = replace(usuario, senha_hash=self.hasher.gerar(senha))
-            await self.repo.salvar_usuario(usuario)
+            novo_hash = await self.gerar_hash(senha)
+            await self.repo.atualizar_usuario(usuario.id, {"senha_hash": novo_hash})
+            usuario = replace(usuario, senha_hash=novo_hash)
         return await self._abrir_sessao(usuario, ip, user_agent, agora)
 
     async def _falha(
-        self, chave: str, uid: int | None, ip: str, user_agent: str, agora: int, evento: str = ""
+        self,
+        chave: str,
+        chave_email: str,
+        uid: int | None,
+        ip: str,
+        user_agent: str,
+        agora: int,
+        evento: str = "",
     ) -> NoReturn:
         pol = self.params.politica
         falhas = await self._contador.incrementar(f"login:falhas:{chave}", pol.memoria_falhas_s)
@@ -146,43 +178,51 @@ class ServicoContas:
             await self._contador.gravar(
                 f"login:bloqueio:{chave}", str(agora + espera * 1000), espera
             )
+        globais = await self._contador.incrementar(
+            f"login:falhas_globais:{chave_email}", pol.janela_global_s
+        )
+        if globais >= pol.falhas_globais_email:
+            await self._contador.gravar(
+                f"login:bloqueio_global:{chave_email}",
+                str(agora + pol.bloqueio_global_s * 1000),
+                pol.bloqueio_global_s,
+            )
         await self.repo.registrar_acesso(uid, evento or "login_falha", ip, user_agent, agora)
         _log.warning("contas.login_falha", extra={"campos": {"usuario_id": uid, "ip": ip}})
         raise ErroConta(401, "credenciais_invalidas", MSG_CREDENCIAIS)
 
     async def _verificar_totp(
-        self, usuario: Usuario, codigo: str | None, chave: str, ip: str, ua: str, agora: int
+        self,
+        usuario: Usuario,
+        codigo: str | None,
+        chave: str,
+        chave_email: str,
+        ip: str,
+        ua: str,
+        agora: int,
     ) -> Usuario:
         if not codigo:
             raise ErroConta(401, "totp_necessario", "Informe o código do autenticador.")
         passo: int | None = None
         if usuario.totp_cifrado:
             try:
-                segredo = self.cifra.decifrar(usuario.totp_cifrado)
+                segredo = self.cifra.decifrar(usuario.totp_cifrado, contexto_totp(usuario.id))
             except ErroCifra:
                 _log.error("contas.totp_indecifravel", extra={"campos": {"usuario_id": usuario.id}})
                 segredo = None
             if segredo:
                 passo = self.totp.passo_valido(segredo, codigo.strip(), agora)
-        ultimo = usuario.totp_ultimo_passo
-        if passo is None or (ultimo is not None and passo <= ultimo):
+        # Gravação condicional: o mesmo código usado em paralelo só passa uma vez.
+        if passo is None or not await self.repo.registrar_passo_totp(usuario.id, passo):
             try:
-                await self._falha(chave, usuario.id, ip, ua, agora, "totp_falha")
+                await self._falha(chave, chave_email, usuario.id, ip, ua, agora, "totp_falha")
             except ErroConta:
                 raise ErroConta(401, "totp_invalido", "Código do autenticador inválido.") from None
-        novo = replace(usuario, totp_ultimo_passo=passo)
-        await self.repo.salvar_usuario(novo)
-        return novo
+        return replace(usuario, totp_ultimo_passo=passo)
 
     async def _abrir_sessao(
         self, usuario: Usuario, ip: str, user_agent: str, agora: int
     ) -> ResultadoLogin:
-        ativas = await self.repo.sessoes_ativas(usuario.id, agora)
-        excesso = len(ativas) - self.params.sessoes_simultaneas + 1
-        for s in ativas[: max(0, excesso)]:
-            await self.repo.salvar_sessao(
-                replace(s, revogada_em=agora, motivo_revogacao="limite_sessoes")
-            )
         token, csrf = gerar_token(), gerar_token()
         await self.repo.criar_sessao(
             Sessao(
@@ -195,6 +235,11 @@ class ServicoContas:
                 ip=ip[:64],
                 user_agent=user_agent[:256],
             )
+        )
+        # Depois de gravar a nova: dois logins simultâneos chegam à mesma escolha (as mais
+        # novas por criação e hash), então nunca sobram sessões além do limite.
+        await self.repo.revogar_excedentes(
+            usuario.id, self.params.sessoes_simultaneas, agora, "limite_sessoes"
         )
         await self.repo.registrar_acesso(usuario.id, "login", ip, user_agent, agora)
         _log.info("contas.login", extra={"campos": {"usuario_id": usuario.id}})
@@ -210,17 +255,17 @@ class ServicoContas:
         if sessao is None or sessao.revogada_em is not None or sessao.expira_em <= agora:
             raise invalida
         if agora - sessao.ultimo_uso > self.params.sessao_ociosa_ms:
-            await self.repo.salvar_sessao(
-                replace(sessao, revogada_em=agora, motivo_revogacao="ociosa")
-            )
+            await self.repo.revogar_sessao(sessao.token_hash, agora, "ociosa")
             raise invalida
         usuario = await self.repo.usuario_por_id(sessao.usuario_id)
         if usuario is None or usuario.status is not StatusUsuario.ATIVO:
             await self.repo.revogar_sessoes(sessao.usuario_id, agora, "usuario_inativo")
             raise invalida
         if agora - sessao.ultimo_uso >= _MINUTO_MS:
+            # Escrita condicional: nunca desfaz uma revogação feita ao mesmo tempo.
+            if not await self.repo.tocar_sessao(sessao.token_hash, agora):
+                raise invalida
             sessao = replace(sessao, ultimo_uso=agora)
-            await self.repo.salvar_sessao(sessao)
         assinatura = await self.repo.assinatura_atual(usuario.id, agora)
         plano = await self.repo.plano(assinatura.plano_id) if assinatura else None
         return Contexto(usuario, sessao, assinatura, plano, agora)
@@ -253,18 +298,24 @@ class ServicoContas:
             return
         agora = self.relogio.agora_ms()
         sessao = await self.repo.sessao(hash_token(token))
-        if sessao is None or sessao.revogada_em is not None:
+        if sessao is None or not await self.repo.revogar_sessao(sessao.token_hash, agora, "logout"):
             return
-        await self.repo.salvar_sessao(replace(sessao, revogada_em=agora, motivo_revogacao="logout"))
         await self.repo.registrar_acesso(sessao.usuario_id, "logout", ip, user_agent, agora)
 
     # ------------------------------------------------------------------ conta
     async def trocar_senha(self, ctx: Contexto, atual: str, nova: str) -> None:
-        if not self.hasher.verificar(ctx.usuario.senha_hash, atual):
+        tentativas = await self._contador.incrementar(
+            f"senha:{ctx.sessao.token_hash}", JANELA_TROCA_SENHA_S
+        )
+        if tentativas > TROCAS_DE_SENHA_POR_SESSAO:
+            raise ErroConta(429, "muitas_tentativas", "Muitas tentativas. Aguarde alguns minutos.")
+        if not await self.verificar_hash(ctx.usuario.senha_hash, atual):
             raise ErroConta(422, "senha_atual_incorreta", "A senha atual está incorreta.")
         validar_senha_nova(nova)
         agora = self.relogio.agora_ms()
-        await self.repo.salvar_usuario(replace(ctx.usuario, senha_hash=self.hasher.gerar(nova)))
+        await self.repo.atualizar_usuario(
+            ctx.usuario.id, {"senha_hash": await self.gerar_hash(nova)}
+        )
         await self.repo.revogar_sessoes(
             ctx.usuario.id, agora, "senha_alterada", exceto=ctx.sessao.token_hash
         )
@@ -275,17 +326,43 @@ class ServicoContas:
     async def preferencias(
         self, ctx: Contexto, modo: Modo | None, layout: dict[str, Any] | None
     ) -> Usuario:
-        usuario = ctx.usuario
         if modo is Modo.AVANCADO and not pode_modo_avancado(ctx):
             raise ErroConta(
                 403, "recurso_nao_incluido", "O modo avançado não está incluído no seu plano."
             )
         if layout is not None:
-            tamanho = len(json.dumps(layout, ensure_ascii=False).encode())
-            if tamanho > LAYOUT_MAXIMO_BYTES:
-                raise ErroConta(422, "layout_grande", "As configurações salvas são grandes demais.")
-            usuario = replace(usuario, layout=layout)
-        if modo is not None:
-            usuario = replace(usuario, modo=modo)
-        await self.repo.salvar_usuario(usuario)
+            validar_layout(layout)
+        usuario = await self.repo.atualizar_preferencias(ctx.usuario.id, modo, layout)
+        if usuario is None:
+            raise ErroConta(401, "sessao_invalida", "Sessão expirada. Entre de novo.")
         return usuario
+
+
+def contexto_totp(usuario_id: int) -> str:
+    """Dado associado da cifra do segredo TOTP: amarra o segredo à linha do usuário."""
+    return f"usuario:{usuario_id}"
+
+
+def _profundidade(valor: Any, limite: int) -> int:
+    """Profundidade de aninhamento, sem recursão (para em ``limite + 1``)."""
+    maior, pilha = 0, [(valor, 1)]
+    while pilha:
+        atual, nivel = pilha.pop()
+        if isinstance(atual, dict | list):
+            maior = max(maior, nivel)
+            if maior > limite:
+                return maior
+            filhos = atual.values() if isinstance(atual, dict) else atual
+            pilha.extend((f, nivel + 1) for f in filhos)
+    return maior
+
+
+def validar_layout(layout: dict[str, Any]) -> None:
+    if _profundidade(layout, LAYOUT_PROFUNDIDADE_MAXIMA) > LAYOUT_PROFUNDIDADE_MAXIMA:
+        raise ErroConta(422, "layout_invalido", "As configurações salvas têm níveis demais.")
+    try:
+        tamanho = len(json.dumps(layout, ensure_ascii=False).encode())
+    except (TypeError, ValueError, RecursionError):
+        raise ErroConta(422, "layout_invalido", "Configurações salvas inválidas.") from None
+    if tamanho > LAYOUT_MAXIMO_BYTES:
+        raise ErroConta(422, "layout_grande", "As configurações salvas são grandes demais.")

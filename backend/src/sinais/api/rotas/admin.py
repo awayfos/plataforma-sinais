@@ -126,6 +126,16 @@ async def _emails(s: Servicos, ids: set[int | None]) -> dict[int, str]:
     return emails
 
 
+@rotas.post(
+    "/assinaturas/{assinatura_id}/encerrar",
+    response_model=e.Assinatura,
+    responses={404: {"model": e.RespostaErro}},
+)
+async def encerrar_assinatura(assinatura_id: int, ctx: AdminMutacao, s: Svc) -> e.Assinatura:
+    """Antecipa o fim da assinatura para agora (auditado). O usuário perde o acesso na hora."""
+    return assinatura_saida(await s.admin.encerrar_assinatura(ctx, assinatura_id))
+
+
 @rotas.get("/acessos", response_model=list[e.Acesso])
 async def acessos(ctx: Admin, s: Svc, usuario_id: int | None = None) -> list[e.Acesso]:
     registros = await s.admin.acessos(usuario_id, LIMITE_LOGS)

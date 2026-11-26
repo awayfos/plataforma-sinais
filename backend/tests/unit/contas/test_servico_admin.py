@@ -194,3 +194,43 @@ def test_listar_usuarios_traz_assinatura_e_acessos() -> None:
         assert [a.evento for a in await adm.acessos(u.id, 10)] == ["login"]
 
     asyncio.run(caso())
+
+
+def test_encerrar_assinatura_antes_do_fim_e_auditar() -> None:
+    async def caso() -> None:
+        amb, adm, ctx = await preparar()
+        u = await cliente(amb)
+        r = await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "i", "u")
+        a = await amb.repo.assinatura_atual(u.id, T0)
+        assert a is not None
+        e = await adm.encerrar_assinatura(ctx, a.id)
+        assert e.fim == T0
+        cctx = await amb.servico.autenticar(r.token)
+        assert cctx.status_assinatura == "vencida"
+        reg = (await adm.auditoria(1))[0]
+        assert (reg.acao, reg.alvo) == ("assinatura.encerrar", f"usuario:{u.id}")
+        assert reg.antes is not None and reg.antes["fim"] == a.fim
+        assert reg.depois is not None and reg.depois["fim"] == T0
+        with pytest.raises(ErroConta) as err:
+            await adm.encerrar_assinatura(ctx, 9999)
+        assert (err.value.status, err.value.codigo) == (404, "assinatura_inexistente")
+
+    asyncio.run(caso())
+
+
+def test_email_tomado_entre_a_checagem_e_a_gravacao_vira_409() -> None:
+    async def caso() -> None:
+        amb, adm, ctx = await preparar()
+        u = await cliente(amb)
+        await cliente(amb, email="bia@exemplo.com")
+        original = amb.repo.usuario_por_email
+
+        async def sem_ver(email: str):  # type: ignore[no-untyped-def]
+            return None if email == "bia@exemplo.com" else await original(email)
+
+        amb.repo.usuario_por_email = sem_ver  # type: ignore[method-assign]
+        with pytest.raises(ErroConta) as e:
+            await adm.editar_usuario(ctx, u.id, email="bia@exemplo.com")
+        assert (e.value.status, e.value.codigo) == (409, "email_em_uso")
+
+    asyncio.run(caso())

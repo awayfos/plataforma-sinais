@@ -191,3 +191,37 @@ def test_preferencias_modo_avancado_exige_plano() -> None:
         assert u2.modo is Modo.AVANCADO
 
     asyncio.run(caso())
+
+
+def test_troca_de_senha_tem_limite_por_sessao() -> None:
+    async def caso() -> None:
+        amb = ambiente()
+        await cliente(amb)
+        ctx = await amb.servico.autenticar((await entrar(amb)).token)
+        for _ in range(5):
+            with pytest.raises(ErroConta) as e:
+                await amb.servico.trocar_senha(ctx, "errada-errada", "nova-senha-456")
+            assert e.value.status == 422
+        with pytest.raises(ErroConta) as e:
+            await amb.servico.trocar_senha(ctx, "senha-forte-123", "nova-senha-456")
+        assert (e.value.status, e.value.codigo) == (429, "muitas_tentativas")
+
+    asyncio.run(caso())
+
+
+def test_layout_profundo_demais_da_422() -> None:
+    async def caso() -> None:
+        amb = ambiente()
+        await cliente(amb)
+        ctx = await amb.servico.autenticar((await entrar(amb)).token)
+        fundo: dict[str, object] = {}
+        atual = fundo
+        for _ in range(5000):
+            novo: dict[str, object] = {}
+            atual["a"] = novo
+            atual = novo
+        with pytest.raises(ErroConta) as e:
+            await amb.servico.preferencias(ctx, None, fundo)
+        assert (e.value.status, e.value.codigo) == (422, "layout_invalido")
+
+    asyncio.run(caso())

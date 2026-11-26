@@ -70,12 +70,13 @@ def test_bloqueio_progressivo_vale_inclusive_para_email_inexistente() -> None:
             with pytest.raises(ErroConta) as e:
                 await amb.servico.login(email, "x" * 10, None, f"ip-{email}", "ua")
             assert (e.value.status, e.value.codigo) == (423, "conta_bloqueada")
-        # nem a senha certa entra durante o bloqueio
+        # nem a senha certa entra durante o bloqueio, a partir do mesmo IP
+        ip = "ip-ana@exemplo.com"
         with pytest.raises(ErroConta) as e:
-            await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "ip3", "ua")
+            await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, ip, "ua")
         assert e.value.status == 423
         amb.relogio.avancar(61 * S)
-        r = await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "ip3", "ua")
+        r = await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, ip, "ua")
         assert r.token
 
     rodar(caso())
@@ -200,3 +201,90 @@ def test_limite_de_sessoes_configuravel() -> None:
             await amb.servico.autenticar(t)
 
     rodar(caso())
+
+
+def test_atacante_de_outro_ip_nao_bloqueia_o_dono_da_conta() -> None:
+    async def caso() -> None:
+        amb = ambiente()
+        await admin(amb)
+        for _ in range(6):
+            with pytest.raises(ErroConta):
+                await amb.servico.login("admin@exemplo.com", "x" * 10, None, "6.6.6.6", "ua")
+        with pytest.raises(ErroConta) as e:
+            await amb.servico.login("admin@exemplo.com", "x" * 10, None, "6.6.6.6", "ua")
+        assert e.value.status == 423
+        r = await amb.servico.login(
+            "admin@exemplo.com", "senha-admin-123", codigo_totp(T0), "10.0.0.1", "ua"
+        )
+        assert r.token
+
+    asyncio.run(caso())
+
+
+def test_teto_global_por_email_bloqueia_ataque_distribuido_sem_enumeracao() -> None:
+    from sinais.contas.limites import PoliticaLogin
+
+    async def caso() -> None:
+        pol = PoliticaLogin(falhas_globais_email=8, bloqueio_global_s=900)
+        amb = ambiente(ParametrosContas(politica=pol))
+        await cliente(amb)
+        for email in ("ana@exemplo.com", "fantasma@exemplo.com"):
+            for i in range(8):
+                with pytest.raises(ErroConta) as e:
+                    await amb.servico.login(email, "x" * 10, None, f"ip{i}-{email}", "ua")
+                assert e.value.status == 401
+            with pytest.raises(ErroConta) as e:
+                await amb.servico.login(email, "senha-forte-123", None, "ip-novo", "ua")
+            assert (e.value.status, e.value.codigo) == (423, "conta_bloqueada")
+        amb.relogio.avancar(901 * S)
+        assert (await amb.servico.login("ana@exemplo.com", "senha-forte-123", None, "i", "u")).token
+
+    asyncio.run(caso())
+
+
+def test_hash_de_senha_roda_fora_do_laco_e_com_limite_de_paralelismo() -> None:
+    import threading
+    import time
+
+    class HasherLento:
+        def __init__(self) -> None:
+            self.threads: set[int] = set()
+            self.ativos = 0
+            self.maximo = 0
+            self._trava = threading.Lock()
+
+        def _trabalho(self) -> None:
+            with self._trava:
+                self.ativos += 1
+                self.maximo = max(self.maximo, self.ativos)
+            self.threads.add(threading.get_ident())
+            time.sleep(0.02)
+            with self._trava:
+                self.ativos -= 1
+
+        def gerar(self, senha: str) -> str:
+            return "h:" + senha
+
+        def verificar(self, hash_: str, senha: str) -> bool:
+            self._trabalho()
+            return hash_ == "h:" + senha
+
+        def precisa_rehash(self, hash_: str) -> bool:
+            return False
+
+    async def caso() -> HasherLento:
+        amb = ambiente(ParametrosContas(hash_paralelo=2, sessoes_simultaneas=10))
+        h = HasherLento()
+        amb.servico.hasher = h
+        await cliente(amb)
+        await asyncio.gather(
+            *(
+                amb.servico.login("ana@exemplo.com", "senha-forte-123", None, f"i{i}", "u")
+                for i in range(6)
+            )
+        )
+        return h
+
+    h = asyncio.run(caso())
+    assert threading.get_ident() not in h.threads
+    assert h.maximo == 2

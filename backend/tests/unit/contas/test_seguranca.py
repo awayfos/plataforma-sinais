@@ -35,10 +35,13 @@ def test_cifra_recusa_chave_errada_e_adulteracao() -> None:
     texto = CifraSegredos(bytes(range(32))).cifrar("segredo")
     with pytest.raises(ErroCifra):
         CifraSegredos(bytes(32)).decifrar(texto)
-    bruto = bytearray(base64.urlsafe_b64decode(texto))
+    prefixo, _, corpo = texto.partition(":")
+    bruto = bytearray(base64.urlsafe_b64decode(corpo))
     bruto[-1] ^= 1
     with pytest.raises(ErroCifra):
-        CifraSegredos(bytes(range(32))).decifrar(base64.urlsafe_b64encode(bytes(bruto)).decode())
+        CifraSegredos(bytes(range(32))).decifrar(
+            prefixo + ":" + base64.urlsafe_b64encode(bytes(bruto)).decode()
+        )
 
 
 def test_cifra_exige_chave_de_32_bytes_e_aceita_base64() -> None:
@@ -48,3 +51,14 @@ def test_cifra_exige_chave_de_32_bytes_e_aceita_base64() -> None:
     assert (
         CifraSegredos.de_base64(chave).decifrar(CifraSegredos(bytes(range(32))).cifrar("s")) == "s"
     )
+
+
+def test_cifra_amarra_ao_usuario_e_identifica_a_chave() -> None:
+    c = CifraSegredos(bytes(range(32)), id_chave="k1")
+    texto = c.cifrar("segredo", "usuario:7")
+    assert texto.startswith("k1:")
+    assert c.decifrar(texto, "usuario:7") == "segredo"
+    with pytest.raises(ErroCifra):  # segredo de outro usuário copiado para esta linha
+        c.decifrar(texto, "usuario:8")
+    with pytest.raises(ErroCifra):  # cifrado com outra chave
+        CifraSegredos(bytes(range(32)), id_chave="k2").decifrar(texto, "usuario:7")

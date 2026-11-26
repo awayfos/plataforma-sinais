@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -25,7 +25,7 @@ from sinais.contas.modelos import (
     StatusUsuario,
     Usuario,
 )
-from sinais.contas.repositorio import ErroEmailDuplicado
+from sinais.contas.repositorio import CAMPOS_USUARIO, ErroEmailDuplicado
 from sinais.core.tempo import InstanteMs, de_datetime, para_datetime
 from sinais.persistencia.tabelas_contas import (
     assinaturas,
@@ -243,6 +243,52 @@ class RepositorioContasPg:
                 )
             )
 
+    async def atualizar_usuario(self, usuario_id: int, campos: Mapping[str, Any]) -> None:
+        if not set(campos) <= CAMPOS_USUARIO:
+            raise ValueError(f"campos não permitidos: {sorted(set(campos) - CAMPOS_USUARIO)}")
+        if not campos:
+            return
+        valores = {k: getattr(v, "value", v) for k, v in campos.items()}
+        try:
+            async with self._engine.begin() as conn:
+                await conn.execute(
+                    update(usuarios).where(usuarios.c.id == usuario_id).values(**valores)
+                )
+        except IntegrityError:
+            raise ErroEmailDuplicado(str(campos.get("email"))) from None
+
+    async def atualizar_preferencias(
+        self, usuario_id: int, modo: Modo | None, layout: dict[str, Any] | None
+    ) -> Usuario | None:
+        valores: dict[str, Any] = {"atualizado_em": func.now()}
+        if modo is not None:
+            valores["modo"] = modo.value
+        if layout is not None:
+            valores["layout"] = layout
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                update(configuracoes_usuario)
+                .where(configuracoes_usuario.c.usuario_id == usuario_id)
+                .values(**valores)
+            )
+        return await self.usuario_por_id(usuario_id)
+
+    async def registrar_passo_totp(self, usuario_id: int, passo: int) -> bool:
+        async with self._engine.begin() as conn:
+            resultado = await conn.execute(
+                update(usuarios)
+                .where(
+                    usuarios.c.id == usuario_id,
+                    or_(
+                        usuarios.c.totp_ultimo_passo.is_(None),
+                        usuarios.c.totp_ultimo_passo < passo,
+                    ),
+                )
+                .values(totp_ultimo_passo=passo)
+                .returning(usuarios.c.id)
+            )
+            return len(resultado.all()) == 1
+
     # --------------------------------------------------------------- sessões
     async def criar_sessao(self, sessao: Sessao) -> None:
         async with self._engine.begin() as conn:
@@ -262,6 +308,48 @@ class RepositorioContasPg:
             await conn.execute(
                 update(sessoes).where(sessoes.c.token_hash == sessao.token_hash).values(**valores)
             )
+
+    async def tocar_sessao(self, token_hash: str, agora: InstanteMs) -> bool:
+        async with self._engine.begin() as conn:
+            resultado = await conn.execute(
+                update(sessoes)
+                .where(sessoes.c.token_hash == token_hash, sessoes.c.revogada_em.is_(None))
+                .values(ultimo_uso=_dt(agora))
+                .returning(sessoes.c.token_hash)
+            )
+            return len(resultado.all()) == 1
+
+    async def revogar_sessao(self, token_hash: str, agora: InstanteMs, motivo: str) -> bool:
+        async with self._engine.begin() as conn:
+            resultado = await conn.execute(
+                update(sessoes)
+                .where(sessoes.c.token_hash == token_hash, sessoes.c.revogada_em.is_(None))
+                .values(revogada_em=_dt(agora), motivo_revogacao=motivo)
+                .returning(sessoes.c.token_hash)
+            )
+            return len(resultado.all()) == 1
+
+    async def revogar_excedentes(
+        self, usuario_id: int, manter: int, agora: InstanteMs, motivo: str
+    ) -> int:
+        mais_novas = (
+            select(sessoes.c.token_hash)
+            .where(sessoes.c.usuario_id == usuario_id, sessoes.c.revogada_em.is_(None))
+            .order_by(sessoes.c.criada_em.desc(), sessoes.c.token_hash.desc())
+            .limit(manter)
+        )
+        async with self._engine.begin() as conn:
+            resultado = await conn.execute(
+                update(sessoes)
+                .where(
+                    sessoes.c.usuario_id == usuario_id,
+                    sessoes.c.revogada_em.is_(None),
+                    sessoes.c.token_hash.not_in(mais_novas.scalar_subquery()),
+                )
+                .values(revogada_em=_dt(agora), motivo_revogacao=motivo)
+                .returning(sessoes.c.token_hash)
+            )
+            return len(resultado.all())
 
     async def sessoes_ativas(self, usuario_id: int, agora: InstanteMs) -> list[Sessao]:
         stmt = (
@@ -364,6 +452,24 @@ class RepositorioContasPg:
                 )
             ).one()
         return _assinatura(linha)
+
+    async def assinatura(self, assinatura_id: int) -> Assinatura | None:
+        async with self._engine.connect() as conn:
+            linha = (
+                await conn.execute(select(assinaturas).where(assinaturas.c.id == assinatura_id))
+            ).first()
+        return None if linha is None else _assinatura(linha)
+
+    async def encerrar_assinatura(self, assinatura_id: int, agora: InstanteMs) -> Assinatura | None:
+        a = assinaturas
+        instante = _dt(agora)
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                update(a)
+                .where(a.c.id == assinatura_id, a.c.fim > instante)
+                .values(fim=func.greatest(instante, a.c.inicio + text("interval '1 millisecond'")))
+            )
+        return await self.assinatura(assinatura_id)
 
     async def assinatura_atual(self, usuario_id: int, agora: InstanteMs) -> Assinatura | None:
         stmt = (

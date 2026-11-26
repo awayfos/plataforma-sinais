@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, replace
+from typing import Any
 
 from sinais.contas.limites import ContadorLimites, ContadorMemoria
 from sinais.contas.memoria import RepositorioContasMemoria
 from sinais.contas.modelos import NovoPlano, NovoUsuario, Papel, Plano, Recursos, Usuario
 from sinais.contas.repositorio import RepositorioContas
 from sinais.contas.seguranca import CifraSegredos
-from sinais.contas.servico import ParametrosContas, ServicoContas
+from sinais.contas.servico import ParametrosContas, ServicoContas, contexto_totp
 from sinais.core.tempo import RelogioFixo
 
 T0 = 1795575600000
@@ -108,13 +110,34 @@ async def cliente(
 
 
 async def admin(amb: Ambiente, email: str = "admin@exemplo.com") -> Usuario:
-    return await amb.repo.criar_usuario(
-        NovoUsuario(
-            email,
-            "Admin",
-            Papel.ADMIN,
-            "h:senha-admin-123",
-            amb.relogio.agora_ms(),
-            totp_cifrado=amb.cifra.cifrar(SEGREDO_TOTP),
-        )
+    u = await amb.repo.criar_usuario(
+        NovoUsuario(email, "Admin", Papel.ADMIN, "h:senha-admin-123", amb.relogio.agora_ms())
     )
+    cifrado = amb.cifra.cifrar(SEGREDO_TOTP, contexto_totp(u.id))
+    await amb.repo.atualizar_usuario(u.id, {"totp_cifrado": cifrado})
+    return replace(u, totp_cifrado=cifrado)
+
+
+class RepositorioIntercalado:
+    """Cede a vez ao laço antes de cada operação: simula requisições concorrentes."""
+
+    def __init__(self, base: RepositorioContasMemoria) -> None:
+        self._base = base
+
+    def __getattr__(self, nome: str) -> Any:
+        alvo = getattr(self._base, nome)
+        if not asyncio.iscoroutinefunction(alvo):
+            return alvo
+
+        async def chamada(*args: Any, **kwargs: Any) -> Any:
+            await asyncio.sleep(0)
+            resultado = await alvo(*args, **kwargs)
+            await asyncio.sleep(0)
+            return resultado
+
+        return chamada
+
+
+def ambiente_concorrente(params: ParametrosContas | None = None) -> Ambiente:
+    repo: Any = RepositorioIntercalado(RepositorioContasMemoria())
+    return ambiente(params, repo)

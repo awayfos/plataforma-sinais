@@ -18,7 +18,7 @@ def test_cria_admin_com_totp_cifrado_e_devolve_uri() -> None:
         u = await amb.repo.usuario_por_email("root@exemplo.com")
         assert u is not None and u.papel is Papel.ADMIN
         assert u.totp_cifrado and SEGREDO_TOTP not in u.totp_cifrado
-        assert amb.cifra.decifrar(u.totp_cifrado) == SEGREDO_TOTP
+        assert amb.cifra.decifrar(u.totp_cifrado, f"usuario:{u.id}") == SEGREDO_TOTP
         r = await amb.servico.login(
             "root@exemplo.com", "senha-admin-123", codigo_totp(T0), "i", "u"
         )
@@ -37,9 +37,7 @@ def test_redefine_admin_existente_e_derruba_sessoes() -> None:
         )
         u = await amb.repo.usuario_por_email("root@exemplo.com")
         assert u is not None
-        from dataclasses import replace
-
-        await amb.repo.salvar_usuario(replace(u, status=StatusUsuario.BLOQUEADO))
+        await amb.repo.atualizar_usuario(u.id, {"status": StatusUsuario.BLOQUEADO})
         await criar_admin(*args, "root@exemplo.com", "Root", "outra-senha-456")
         with pytest.raises(ErroConta):
             await amb.servico.autenticar(r.token)

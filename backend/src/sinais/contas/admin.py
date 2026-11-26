@@ -120,7 +120,7 @@ class ServicoAdmin:
                     email,
                     nome.strip(),
                     Papel.CLIENTE,
-                    self._c.hasher.gerar(senha_temporaria),
+                    await self._c.gerar_hash(senha_temporaria),
                     agora,
                 )
             )
@@ -153,8 +153,10 @@ class ServicoAdmin:
         if status is not None and u.id == ctx.usuario.id and status is not StatusUsuario.ATIVO:
             raise ErroConta(422, "acao_invalida", "Você não pode bloquear a própria conta.")
         novo = u
+        campos: dict[str, Any] = {}
         if nome is not None:
             novo = replace(novo, nome=nome.strip())
+            campos["nome"] = novo.nome
         if email is not None:
             e = normalizar_email(email)
             if not _EMAIL.match(e):
@@ -163,12 +165,18 @@ class ServicoAdmin:
             if outro is not None and outro.id != u.id:
                 raise ErroConta(409, "email_em_uso", "Já existe uma conta com este e-mail.")
             novo = replace(novo, email=e)
+            campos["email"] = e
         if status is not None:
             novo = replace(novo, status=status)
+            campos["status"] = status
         if senha_temporaria is not None:
             validar_senha_nova(senha_temporaria)
-            novo = replace(novo, senha_hash=self._c.hasher.gerar(senha_temporaria))
-        await self._repo.salvar_usuario(novo)
+            campos["senha_hash"] = await self._c.gerar_hash(senha_temporaria)
+        try:
+            # Só as colunas pedidas: nunca desfaz outra mudança feita ao mesmo tempo.
+            await self._repo.atualizar_usuario(u.id, campos)
+        except ErroEmailDuplicado:
+            raise ErroConta(409, "email_em_uso", "Já existe uma conta com este e-mail.") from None
         if (status is not None and status is not StatusUsuario.ATIVO) or senha_temporaria:
             motivo = "senha_redefinida" if senha_temporaria else f"usuario_{status}"
             await self._repo.revogar_sessoes(u.id, agora, motivo)
@@ -252,6 +260,20 @@ class ServicoAdmin:
         a = await self._repo.criar_assinatura(usuario_id, p.id, inicio, fim, "manual", agora)
         await self._auditar(ctx, "assinatura.criar", f"usuario:{usuario_id}", None, asdict(a))
         return a
+
+    async def encerrar_assinatura(self, ctx: Contexto, assinatura_id: int) -> Assinatura:
+        """Antecipa o fim da assinatura para agora (cancelamento, estorno). Vale na hora em
+        REST e WebSocket."""
+        antes = await self._repo.assinatura(assinatura_id)
+        if antes is None:
+            raise ErroConta(404, "assinatura_inexistente", "Assinatura não encontrada.")
+        depois = await self._repo.encerrar_assinatura(assinatura_id, self._c.relogio.agora_ms())
+        if depois is None:  # pragma: no cover - apagada entre as duas leituras
+            raise ErroConta(404, "assinatura_inexistente", "Assinatura não encontrada.")
+        await self._auditar(
+            ctx, "assinatura.encerrar", f"usuario:{antes.usuario_id}", asdict(antes), asdict(depois)
+        )
+        return depois
 
     # ---------------------------------------------------------------- logs
     async def acessos(self, usuario_id: int | None, limite: int = 500) -> list[RegistroAcesso]:

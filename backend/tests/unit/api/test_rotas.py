@@ -293,3 +293,20 @@ def test_patch_de_plano_com_id_no_corpo_e_logs_com_email() -> None:
     acesso = adm.get("/api/admin/acessos").json()[0]
     assert acesso["email"] == "admin@exemplo.com" and acesso["ts"] == acesso["t"]
     assert adm.get("/api/admin/qualidade").json() == []
+
+
+def test_admin_encerra_assinatura_e_o_cliente_perde_o_acesso_na_hora() -> None:
+    app = preparar()
+    ana, adm = app.cliente(), app.cliente()
+    entrar(ana, "ana@exemplo.com", SENHA)
+    entrar_admin(app, adm)
+    assert ana.get("/api/ativos").status_code == 200
+    uid = ana.get("/api/eu").json()["id"]
+    a = asyncio.run(app.amb.repo.assinatura_atual(uid, T0_CONTAS))
+    assert a is not None
+    assert adm.post(f"/api/admin/assinaturas/{a.id}/encerrar").status_code == 403  # sem CSRF
+    r = adm.post(f"/api/admin/assinaturas/{a.id}/encerrar", headers=csrf(adm))
+    assert r.status_code == 200 and r.json()["fim"] == T0_CONTAS
+    assert ana.get("/api/ativos").status_code == 402
+    assert adm.post("/api/admin/assinaturas/9999/encerrar", headers=csrf(adm)).status_code == 404
+    assert adm.get("/api/admin/auditoria").json()[0]["acao"] == "assinatura.encerrar"

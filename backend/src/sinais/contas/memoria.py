@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -20,7 +20,7 @@ from sinais.contas.modelos import (
     StatusUsuario,
     Usuario,
 )
-from sinais.contas.repositorio import ErroEmailDuplicado
+from sinais.contas.repositorio import CAMPOS_USUARIO, ErroEmailDuplicado
 from sinais.core.tempo import InstanteMs
 
 _ORDEM_EXPIRACAO = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "60m": 60}
@@ -92,6 +92,39 @@ class RepositorioContasMemoria:
     async def salvar_usuario(self, usuario: Usuario) -> None:
         self._usuarios[usuario.id] = replace(usuario, layout=copy.deepcopy(usuario.layout))
 
+    async def atualizar_usuario(self, usuario_id: int, campos: Mapping[str, Any]) -> None:
+        if not set(campos) <= CAMPOS_USUARIO:
+            raise ValueError(f"campos não permitidos: {sorted(set(campos) - CAMPOS_USUARIO)}")
+        u = self._usuarios.get(usuario_id)
+        if u is None:
+            return
+        email = campos.get("email")
+        if email is not None and any(
+            o.email == email and o.id != usuario_id for o in self._usuarios.values()
+        ):
+            raise ErroEmailDuplicado(str(email))
+        self._usuarios[usuario_id] = replace(u, **dict(campos))
+
+    async def atualizar_preferencias(
+        self, usuario_id: int, modo: Modo | None, layout: dict[str, Any] | None
+    ) -> Usuario | None:
+        u = self._usuarios.get(usuario_id)
+        if u is None:
+            return None
+        if modo is not None:
+            u = replace(u, modo=modo)
+        if layout is not None:
+            u = replace(u, layout=copy.deepcopy(layout))
+        self._usuarios[usuario_id] = u
+        return u
+
+    async def registrar_passo_totp(self, usuario_id: int, passo: int) -> bool:
+        u = self._usuarios.get(usuario_id)
+        if u is None or (u.totp_ultimo_passo is not None and passo <= u.totp_ultimo_passo):
+            return False
+        self._usuarios[usuario_id] = replace(u, totp_ultimo_passo=passo)
+        return True
+
     async def criar_sessao(self, sessao: Sessao) -> None:
         self._sessoes[sessao.token_hash] = sessao
 
@@ -100,6 +133,33 @@ class RepositorioContasMemoria:
 
     async def salvar_sessao(self, sessao: Sessao) -> None:
         self._sessoes[sessao.token_hash] = sessao
+
+    async def tocar_sessao(self, token_hash: str, agora: InstanteMs) -> bool:
+        s = self._sessoes.get(token_hash)
+        if s is None or s.revogada_em is not None:
+            return False
+        self._sessoes[token_hash] = replace(s, ultimo_uso=agora)
+        return True
+
+    async def revogar_sessao(self, token_hash: str, agora: InstanteMs, motivo: str) -> bool:
+        s = self._sessoes.get(token_hash)
+        if s is None or s.revogada_em is not None:
+            return False
+        self._sessoes[token_hash] = replace(s, revogada_em=agora, motivo_revogacao=motivo)
+        return True
+
+    async def revogar_excedentes(
+        self, usuario_id: int, manter: int, agora: InstanteMs, motivo: str
+    ) -> int:
+        ativas = [
+            s
+            for s in self._sessoes.values()
+            if s.usuario_id == usuario_id and s.revogada_em is None
+        ]
+        ativas.sort(key=lambda s: (s.criada_em, s.token_hash), reverse=True)
+        for s in ativas[manter:]:
+            self._sessoes[s.token_hash] = replace(s, revogada_em=agora, motivo_revogacao=motivo)
+        return len(ativas[manter:])
 
     async def sessoes_ativas(self, usuario_id: int, agora: InstanteMs) -> list[Sessao]:
         ativas = [
@@ -155,6 +215,17 @@ class RepositorioContasMemoria:
         a = Assinatura(self._id(), usuario_id, plano_id, inicio, fim, origem, agora)
         self._assinaturas.append(a)
         return a
+
+    async def assinatura(self, assinatura_id: int) -> Assinatura | None:
+        return next((a for a in self._assinaturas if a.id == assinatura_id), None)
+
+    async def encerrar_assinatura(self, assinatura_id: int, agora: InstanteMs) -> Assinatura | None:
+        for i, a in enumerate(self._assinaturas):
+            if a.id == assinatura_id:
+                if a.fim > agora:
+                    self._assinaturas[i] = a = replace(a, fim=max(agora, a.inicio + 1))
+                return a
+        return None
 
     async def assinatura_atual(self, usuario_id: int, agora: InstanteMs) -> Assinatura | None:
         candidatas = [

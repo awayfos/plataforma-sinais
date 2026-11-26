@@ -1,7 +1,8 @@
 """Limites de tentativas (rate limit) e bloqueio progressivo de login (design §15).
 
-As chaves usam o hash do e-mail, existente ou não: quem tenta adivinhar contas recebe as
-mesmas respostas e o mesmo bloqueio para e-mails cadastrados e inexistentes.
+O bloqueio progressivo vale por (e-mail, IP): um atacante não trava o dono da conta, que entra
+de outro IP. Um teto global por e-mail, bem mais alto, segura o ataque distribuído. As chaves
+usam hash, existente ou não o e-mail: quem tenta adivinhar contas recebe as mesmas respostas.
 """
 
 from __future__ import annotations
@@ -33,6 +34,10 @@ class PoliticaLogin:
     bloqueio_inicial_s: int = 60
     bloqueio_maximo_s: int = 1800
     memoria_falhas_s: int = 86_400
+    # Teto global por e-mail (todos os IPs somados), contra ataque distribuído.
+    falhas_globais_email: int = 50
+    janela_global_s: int = 3600
+    bloqueio_global_s: int = 900
 
     def bloqueio_s(self, falhas: int) -> int:
         """Bloqueio após ``falhas`` seguidas: 60 s na 5ª, dobra a cada nova, teto 30 min."""

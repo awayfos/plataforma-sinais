@@ -13,13 +13,17 @@ import asyncio
 import getpass
 import os
 import sys
-from dataclasses import replace
 
 from sinais.contas.modelos import NovoUsuario, Papel, StatusUsuario
 from sinais.contas.repositorio import RepositorioContas
 from sinais.contas.seguranca import CifraSegredos
 from sinais.contas.senhas import Hasher
-from sinais.contas.servico import ErroConta, normalizar_email, validar_senha_nova
+from sinais.contas.servico import (
+    ErroConta,
+    contexto_totp,
+    normalizar_email,
+    validar_senha_nova,
+)
 from sinais.contas.totp import VerificadorTotp
 from sinais.core.tempo import Relogio
 
@@ -38,25 +42,25 @@ async def criar_admin(
     email = normalizar_email(email)
     validar_senha_nova(senha)
     segredo = totp.novo_segredo()
-    cifrado = cifra.cifrar(segredo)
     existente = await repo.usuario_por_email(email)
     agora = relogio.agora_ms()
     if existente is None:
-        await repo.criar_usuario(
-            NovoUsuario(email, nome, Papel.ADMIN, hasher.gerar(senha), agora, totp_cifrado=cifrado)
+        existente = await repo.criar_usuario(
+            NovoUsuario(email, nome, Papel.ADMIN, hasher.gerar(senha), agora)
         )
     else:
-        await repo.salvar_usuario(
-            replace(
-                existente,
-                papel=Papel.ADMIN,
-                status=StatusUsuario.ATIVO,
-                senha_hash=hasher.gerar(senha),
-                totp_cifrado=cifrado,
-                totp_ultimo_passo=None,
-            )
-        )
         await repo.revogar_sessoes(existente.id, agora, "admin_redefinido")
+    # O segredo é cifrado com o id do usuário como dado associado (precisa do id antes).
+    await repo.atualizar_usuario(
+        existente.id,
+        {
+            "papel": Papel.ADMIN,
+            "status": StatusUsuario.ATIVO,
+            "senha_hash": hasher.gerar(senha),
+            "totp_cifrado": cifra.cifrar(segredo, contexto_totp(existente.id)),
+            "totp_ultimo_passo": None,
+        },
+    )
     return totp.uri(segredo, email)
 
 
