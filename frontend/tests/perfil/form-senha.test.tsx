@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { definirTratadorSessao } from "@/lib/api/cliente";
 import { FormSenha } from "@/components/perfil/FormSenha";
 import { caminho, simularFetch } from "../apoio/fetch";
 
@@ -36,5 +37,15 @@ describe("FormSenha", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Senha alterada. As outras sessões foram encerradas.");
     expect(chamadas[0]!.metodo).toBe("POST");
     expect(chamadas[0]!.corpo).toEqual({ senha_atual: "antiga-123", senha_nova: "nova-senha-forte" });
+  });
+
+  it.each([422, 403])("senha atual errada (%i) mostra a mensagem e não encerra a sessão", async (status) => {
+    const tratador = { aoNaoAutenticado: vi.fn(), aoAssinaturaVencida: vi.fn() };
+    definirTratadorSessao(tratador);
+    simularFetch(() => ({ status, corpo: { erro: { codigo: "senha_incorreta", mensagem: "Senha atual incorreta." } } }));
+    render(<FormSenha />);
+    await preencher("errada-12345", "nova-senha-forte", "nova-senha-forte");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Senha atual incorreta.");
+    expect(tratador.aoNaoAutenticado).not.toHaveBeenCalled();
   });
 });

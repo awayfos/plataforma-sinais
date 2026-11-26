@@ -66,6 +66,19 @@ describe("requisicao", () => {
     await expect(requisicao("/api/auth/logout", { metodo: "POST" })).resolves.toBeUndefined();
   });
 
+  it("registra o relógio do servidor pelo cabeçalho Date", async () => {
+    const { agoraServidor, redefinirRelogio } = await import("@/lib/relogio");
+    redefinirRelogio();
+    const servidor = Date.now() + 60_000;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("[]", { status: 200, headers: { Date: new Date(servidor).toUTCString() } })),
+    );
+    await requisicao("/api/ativos");
+    expect(Math.abs(agoraServidor(Date.now()) - servidor)).toBeLessThan(2_000);
+    redefinirRelogio();
+  });
+
   it("falha de rede vira ErroApi status 0", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
     const erro = (await requisicao("/api/ativos").catch((e: unknown) => e)) as ErroApi;

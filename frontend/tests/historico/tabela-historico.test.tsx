@@ -46,6 +46,27 @@ describe("Historico", () => {
     });
   });
 
+  it("não lista AGUARDAR e pagina de 50 em 50", async () => {
+    const muitos: SinalHistorico[] = Array.from({ length: 120 }, (_, i) => ({
+      ...itens[1]!,
+      id: `m${i}`,
+      gerado_em: Date.parse("2026-11-25T00:00:00Z") + i * 60_000,
+    }));
+    const espera: SinalHistorico = { ...itens[0]!, id: "espera", direcao: "AGUARDAR", resultado: null, apertado: null };
+    simularFetch((c) => {
+      if (caminho(c.url) === "/api/ativos") return { corpo: [] };
+      if (caminho(c.url) === "/api/sinais/historico") return { corpo: [espera, ...muitos] };
+      return undefined;
+    });
+    const user = userEvent.setup();
+    render(<Historico />);
+    expect(await screen.findByTestId("resumo-n")).toHaveTextContent("120");
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(50);
+    expect(screen.queryByText("AGUARDAR")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Mostrar mais/ }));
+    expect(screen.getAllByRole("row").slice(1)).toHaveLength(100);
+  });
+
   it("sem sinais mostra estado vazio explicativo", async () => {
     simularFetch((c) => {
       if (caminho(c.url) === "/api/ativos") return { corpo: [] };

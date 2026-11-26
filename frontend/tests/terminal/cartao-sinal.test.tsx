@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CartaoSinal } from "@/components/terminal/CartaoSinal";
+import { redefinirRelogio, registrarHoraServidor } from "@/lib/relogio";
 import type { Sinal } from "@/lib/api/tipos";
 import { caminho, simularFetch } from "../apoio/fetch";
 
@@ -31,7 +32,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  redefinirRelogio();
+});
 
 describe("CartaoSinal", () => {
   it("mostra direção, probabilidade com n, invalidação e contagem regressiva", () => {
@@ -40,7 +44,8 @@ describe("CartaoSinal", () => {
     expect(screen.getByText("57,1%")).toBeInTheDocument();
     expect(screen.getByText(/n = 412/)).toBeInTheDocument();
     expect(screen.getByText("Fechamento abaixo de 43.010")).toBeInTheDocument();
-    expect(screen.getByTestId("contagem")).toHaveTextContent("0:24");
+    // 24 s até o corte menos 1 s de margem de segurança
+    expect(screen.getByTestId("contagem")).toHaveTextContent("0:23");
     expect(screen.getByText(/10:30:29/)).toBeInTheDocument();
   });
 
@@ -49,6 +54,25 @@ describe("CartaoSinal", () => {
     expect(screen.queryByText("Fora da janela, não entre")).toBeNull();
     act(() => vi.advanceTimersByTime(25_000));
     expect(screen.getByText("Fora da janela, não entre")).toBeInTheDocument();
+  });
+
+  it("usa o relógio do servidor: com o cliente 15 s atrasado a contagem é menor", () => {
+    // Servidor está em 13:30:20 (Date com resolução de 1 s → estimativa 13:30:20,5) enquanto o cliente marca 13:30:05.
+    registrarHoraServidor("Wed, 25 Nov 2026 13:30:20 GMT", Date.now());
+    render(<CartaoSinal sinal={base} simbolo="BTCUSDT" />);
+    // 13:30:29 − 13:30:20,5 − 1 s de margem = 7,5 s
+    expect(screen.getByTestId("contagem")).toHaveTextContent("0:08");
+  });
+
+  it("com o cliente adiantado além da janela, já mostra fora da janela", () => {
+    registrarHoraServidor("Wed, 25 Nov 2026 13:30:40 GMT", Date.now());
+    render(<CartaoSinal sinal={base} simbolo="BTCUSDT" />);
+    expect(screen.getByText("Fora da janela, não entre")).toBeInTheDocument();
+  });
+
+  it("probabilidade sem n não aparece no cartão", () => {
+    render(<CartaoSinal sinal={{ ...base, n_validacao: null }} simbolo="BTCUSDT" />);
+    expect(screen.queryByText("57,1%")).toBeNull();
   });
 
   it("expiração curta tem o aviso de entrada precisa", () => {

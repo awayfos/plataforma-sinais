@@ -24,6 +24,15 @@ describe("PainelAnalise", () => {
     expect(screen.getByTestId("tendencia-1h")).toHaveTextContent("Baixa");
   });
 
+  it("tempo gráfico ausente na análise mostra — e não Lateral", () => {
+    const { "1h": _omitido, ...semUmaHora } = analiseTeste.tendencia;
+    void _omitido;
+    const analise = { ...analiseTeste, tendencia: semUmaHora as typeof analiseTeste.tendencia };
+    render(<PainelAnalise analise={analise} modo="essencial" aberto />);
+    expect(screen.getByTestId("tendencia-1h")).toHaveTextContent("—");
+    expect(screen.getByTestId("tendencia-1h")).not.toHaveTextContent("Lateral");
+  });
+
   it("evento de estrutura legível", () => {
     render(<PainelAnalise analise={analiseTeste} modo="essencial" aberto />);
     expect(screen.getByText(/Rompimento de estrutura para cima/)).toBeInTheDocument();

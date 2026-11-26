@@ -39,6 +39,11 @@ describe("estatisticas", () => {
     expect(s).toEqual({ n: 4, win: 2, loss: 1, tie: 1, semDado: 1, pendentes: 1, apertados: 0, taxa: 2 / 3 });
   });
 
+  it("AGUARDAR não entra nas estatísticas", () => {
+    const espera = { ...h(null), direcao: "AGUARDAR" as const };
+    expect(estatisticas([h("WIN"), espera]).pendentes).toBe(0);
+  });
+
   it("sem operações decididas a taxa é nula", () => {
     expect(estatisticas([h("TIE")]).taxa).toBeNull();
   });

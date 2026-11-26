@@ -65,4 +65,17 @@ describe("destinoSeguro", () => {
     expect(destinoSeguro("/login")).toBe("/terminal");
     expect(destinoSeguro(undefined)).toBe("/terminal");
   });
+
+  it("rejeita caracteres de controle e barra invertida (o navegador os remove e vira outro host)", () => {
+    expect(destinoSeguro("/\t/evil.com")).toBe("/terminal");
+    expect(destinoSeguro("/\n/evil.com")).toBe("/terminal");
+    expect(destinoSeguro("/\r/evil.com")).toBe("/terminal");
+    expect(destinoSeguro("/\\evil.com")).toBe("/terminal");
+    expect(destinoSeguro("/\\/evil.com")).toBe("/terminal");
+  });
+
+  it("mantém caminho interno codificado, consulta e âncora", () => {
+    expect(destinoSeguro("/%09/evil.com")).toBe("/%09/evil.com");
+    expect(destinoSeguro("/historico?simbolo=BTCUSDT#topo")).toBe("/historico?simbolo=BTCUSDT#topo");
+  });
 });

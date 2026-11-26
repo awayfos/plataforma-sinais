@@ -103,6 +103,32 @@ describe("ClienteTempoReal", () => {
     expect(aoSessaoRevogada).toHaveBeenCalledOnce();
   });
 
+  it("após 3 falhas seguidas sem abrir, avisa (para conferir a sessão por HTTP)", () => {
+    const aoFalhasSeguidas = vi.fn();
+    const { cliente, sockets, agendados } = montar({ aoFalhasSeguidas });
+    cliente.assinar("sinais:BTCUSDT", () => {});
+    sockets[0]!.cair(1006);
+    agendados[0]!.fn();
+    sockets[1]!.cair(1006);
+    expect(aoFalhasSeguidas).not.toHaveBeenCalled();
+    agendados[1]!.fn();
+    sockets[2]!.cair(1006);
+    expect(aoFalhasSeguidas).toHaveBeenCalledTimes(1);
+  });
+
+  it("uma conexão aberta zera a contagem de falhas", () => {
+    const aoFalhasSeguidas = vi.fn();
+    const { cliente, sockets, agendados } = montar({ aoFalhasSeguidas });
+    cliente.assinar("sinais:BTCUSDT", () => {});
+    sockets[0]!.cair(1006);
+    agendados[0]!.fn();
+    sockets[1]!.abrir();
+    sockets[1]!.cair(1006);
+    agendados[1]!.fn();
+    sockets[2]!.cair(1006);
+    expect(aoFalhasSeguidas).not.toHaveBeenCalled();
+  });
+
   it("ignora mensagens inválidas", () => {
     const { cliente, sockets } = montar();
     const f = vi.fn();
