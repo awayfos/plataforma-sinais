@@ -1,9 +1,9 @@
 # Fase 9 — Plataforma web (frontend) e interface do admin
 
-- **Status:** implementada no PR #13 (`plataforma-frontend`), aguardando revisão e aprovação visual do cliente.
+- **Status:** implementada no PR #13 (`plataforma-frontend`) e integrada ao backend em `main`; correções da revisão de integração no branch `integracao-correcoes` (seção 2.4). Aguarda revisão e aprovação visual do cliente.
 - **Plano:** `docs/superpowers/plans/2026-11-25-plataforma-frontend.md`
 - **Contrato:** `docs/api/contrato-v1.md` (o frontend foi escrito contra ele; o backend da Fase 8 é desenvolvido em paralelo)
-- **Como rodar:** `frontend/README.md`
+- **Como rodar:** `docs/COMO-RODAR-LOCAL.md` (passo a passo completo) e `frontend/README.md`
 
 ## 1. O que foi construído
 
@@ -28,8 +28,8 @@ Camada técnica:
 ## 2. Decisões tomadas (rulings)
 
 1. `src/proxy.ts` em vez de `middleware.ts`: no Next.js 16 o arquivo e a função foram renomeados.
-2. O contrato não devolve `layout` em `GET /api/eu`. O frontend grava com `PATCH` e lê `usuario.layout` se vier; senão, usa uma cópia no `localStorage`. Os desenhos não acompanham o usuário entre aparelhos até o backend devolver o layout.
-3. O `Sinal` do contrato não tem tolerância de preço nem preço de referência (design §12.6). O cartão mostra esses campos só se o backend enviar `tolerancia_preco` e `preco_referencia` (opcionais nos tipos).
+2. `layout`: o frontend grava com `PATCH` e lê `usuario.layout` (o backend devolve desde o PR #14); a cópia no `localStorage` só vale quando o servidor não tem nada salvo.
+3. Tolerância de preço e preço de referência (design §12.6): o cartão mostra `tolerancia_preco` e `preco_referencia` quando vêm (no contrato desde o PR #14; nulos em AGUARDAR).
 4. As estatísticas do cartão são calculadas no navegador a partir de `/api/sinais/historico` (dados reais, mesma regra do histórico).
 5. "Difícil de romper" a partir de 3 toques (o contrato não fixa o limite). O número de toques aparece sempre.
 6. Indicadores do gráfico calculados no navegador, só para exibição; a análise oficial vem do backend.
@@ -75,20 +75,36 @@ Testes enviados antes (`7a2a390`: 8 falhando), verdes com a correção (`273c2e9
 | 7 | Handshake recusado (4403 → 1006) com `/api/eu` válido: para o laço rápido, status "Ao vivo indisponível" e nova tentativa a cada minuto | `ws/cliente.test.ts` › modo lento…; `terminal.test.tsx` › handshake recusado… |
 | 8 | Admin: redefinir senha temporária (`PATCH {senha_temporaria}`); id numérico do plano ao criar usuário | `usuarios.test.tsx` › redefinir senha…; criar envia o id numérico… |
 | 9 | Layout do servidor lido primeiro (`usuario.layout`); cópia local só se o servidor não tiver nada | — (já lia primeiro; só o comentário e o caso `{}` mudaram) |
-| 10 | Encerrar assinatura antes do fim: **TODO** — a rota ainda não existe em `origin/plataforma-backend`; quando existir, botão "Encerrar agora" em `/admin/usuarios` e `/admin/assinaturas` | — |
+| 10 | Encerrar assinatura antes do fim: feito na revisão de integração (botão "Encerrar" em `/admin/usuarios`, seção 2.4) | `usuarios.test.tsx` › encerrar assinatura |
 
 ## 2.3 Gráfico tick a tick (como na Binance)
 
 Testes enviados antes (`06af23b`: 4 arquivos e 3 testes falhando; o e2e não chegou a rodar porque o build também faz checagem de tipos dos testes), verdes com a implementação (`5bd1a77`, `b30d251`).
 
-- `lib/serieAoVivo.ts`: mesmo `t` substitui a última barra; `t` maior anexa; `t` menor é ignorado; depois de `fechado: true` (ou de uma barra vinda do REST) um tick em formação do mesmo `t` é ignorado; tick de outro canal (troca de ativo ou de tempo gráfico) é descartado; o snapshot que chega antes do REST é guardado e reaplicado; recarregar o REST no mesmo canal (reconexão) mantém a barra em formação mais nova. Testes: `serie-ao-vivo.test.ts`.
+- `lib/serieAoVivo.ts`: mesmo `t` substitui a última barra; `t` maior anexa; `t` menor é ignorado (exceto o `fechado: true` oficial, que substitui a barra de mesmo `t` entre as últimas 5, ver 2.4); depois de `fechado: true` (ou de uma barra vinda do REST) um tick em formação do mesmo `t` é ignorado; tick de outro canal (troca de ativo ou de tempo gráfico) é descartado; o snapshot que chega antes do REST é guardado e reaplicado; recarregar o REST no mesmo canal (reconexão) mantém a barra em formação mais nova. Testes: `serie-ao-vivo.test.ts`.
 - `lib/agrupador.ts`: os ticks de um quadro são aplicados juntos no `requestAnimationFrame`, com fila limitada (aba em segundo plano). Teste: `agrupador.test.ts`.
 - `lib/indicadoresIncrementais.ts`: EMA 9/21, Bollinger, VWAP, RSI e MACD recalculam só a barra tocada; o resultado bate com o cálculo completo depois de ticks e barras novas. Teste: `indicadores-incrementais.test.ts`.
 - `Grafico.tsx`: os ticks não passam pelo estado do React. Cada quadro chama `update` só nas barras tocadas (velas, volume e indicadores), sem `setData`. A legenda OHLC é escrita direto no DOM. A linha e o rótulo do último preço ficam na cor da barra (alta/baixa), com a contagem até o fechamento no eixo (ex.: "00:37"), pelo relógio do servidor. Teste: `formato.test.ts` › contagem até o fechamento.
 - Preço ao vivo com piscada verde/vermelha no cabeçalho e na lista de ativos (`PrecoAoVivo`, `useSyncExternalStore`: só o número re-renderiza). Usa os ticks do gráfico e o canal opcional `preco:SIMB`. Teste: `precos.test.tsx`.
 - E2E `ticks.spec.ts`: o WebSocket simulado envia o snapshot e mais 50 ticks em 5 s no mesmo `t`. O fechamento da última barra termina igual ao último tick e a quantidade de barras não muda durante os ticks.
 
+## 2.4 Correções da revisão de integração (`integracao-correcoes`)
+
+Testes enviados antes (`bec0014`: 10 testes falhando no CI), verdes com a correção (`f38b8a9`).
+
+| Item | O que mudou | Teste |
+|---|---|---|
+| I1 | O 1m oficial (`fechado: true`) chega 1–2 s depois dos primeiros ticks da barra seguinte e era descartado. Agora substitui a barra de mesmo `t` entre as últimas 5; o gráfico atualiza as barras tocadas em ordem de tempo (`update(barra, historicalUpdate)`) e os indicadores são recalculados daquela barra até o fim | `serie-ao-vivo.test.ts` › fechamento oficial depois de 3 ticks…, mesmo quadro…; `indicadores-incrementais.test.ts` › oficial atrasado… |
+| I4 | Histórico "Todos" e o resumo do Perfil chamam sem `simbolo` (o backend agora aceita) | `tabela-historico.test.tsx`, `perfil.test.tsx` |
+| I5 | Documentação: WebSocket direto só por `ws://localhost:8000/api/ws`, nunca `127.0.0.1` (o cookie é do host `localhost`) | — |
+| M10 | Contagem do rótulo de preço avança pelo relógio para o próximo período quando não chega tick (não para em 00:00); deslocamento do relógio do servidor = mediana das últimas 7 amostras | `contagem-vela.test.ts`, `relogio.test.ts` |
+| M11 | Ticks guardados de canais ainda não carregados: no máximo 3 canais, descartados ao cancelar a assinatura e ao carregar outro canal | `serie-ao-vivo.test.ts` › espera limitada… |
+| Admin | Botão "Encerrar" (com confirmação) para a assinatura vigente | `usuarios.test.tsx` › encerrar assinatura… |
+| E2E real | `e2e-real/terminal-real.spec.ts` + `playwright.real.config.ts`: contra o backend real do Compose (job `e2e-real` do CI) | o próprio teste |
+
 ## 3. Pontos do contrato para o backend
+
+Itens 1 a 6 resolvidos no PR #14 (ver `docs/fases/fase-07-08-10-backend.md`, "Acréscimos pedidos pelo frontend"); 7 e 8 continuam abertos.
 
 1. Devolver `layout` em `GET /api/eu` (hoje só existe a escrita).
 2. Incluir no `Sinal` a tolerância de preço e o preço de referência da janela de entrada (design §12.6).
@@ -105,7 +121,7 @@ Workflow `.github/workflows/frontend.yml` (push e pull request em `frontend/**`,
 
 | Job | Passos |
 |---|---|
-| Lint e tipos | `npm install`, `npm run lint` (ESLint 9 + `eslint-config-next` 16), `npm run typecheck` (`next typegen && tsc --noEmit`) |
+| Lint e tipos | `npm ci`, `npm run lint` (ESLint 9 + `eslint-config-next` 16), `npm run typecheck` (`next typegen && tsc --noEmit`) |
 | Testes (Vitest) | `npm test` |
 | Build e E2E | `npm run build`, `npx playwright install --with-deps chromium`, `npm run e2e` contra `next start`, capturas de tela |
 
@@ -123,6 +139,6 @@ Revisão visual: as capturas do CI saem também no log do job (em base64), porqu
 ## 5. Pendências
 
 - Revisão visual pelo cliente (critério da Fase 9).
-- Latência de ponta a ponta medida só com o backend real (critério da Fase 9).
-- Página pública de estatísticas (`/api/publico/estatisticas`) depende do formato da resposta (ponto 3 acima).
+- Latência de ponta a ponta medida com o backend real (critério da Fase 9). O job `e2e-real` já prova o caminho navegador → Next → API → Redis → Binance com ticks reais; a medição de latência ainda não foi feita.
+- Página pública de estatísticas (`/api/publico/estatisticas`): o formato está fixado no contrato; a página ainda não existe.
 - CSP com nonce e cabeçalhos HSTS ficam para a Fase 11 (hoje: `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`).

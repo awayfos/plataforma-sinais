@@ -5,12 +5,13 @@ Toda a interface em português do Brasil. O frontend só fala com `/api` (contra
 
 ## Rodar localmente
 
-Requer Node.js ≥ 20.9 (o CI usa Node 22) e o backend FastAPI rodando em `http://127.0.0.1:8000`.
+Requer Node.js ≥ 20.9 (o CI usa Node 22) e o backend rodando (passo a passo completo, do zero: `docs/COMO-RODAR-LOCAL.md`;
+o backend sobe com `infra/dev.sh subir`).
 
 ```bash
 cd frontend
 npm ci               # requer acesso ao registro npm (ver "Lockfile" abaixo)
-npm run dev          # http://localhost:3000
+npm run dev          # abra http://localhost:3000 (use "localhost", não 127.0.0.1)
 ```
 
 O Next repassa `/api/*` para o backend por um rewrite (`next.config.ts`). Para outro endereço:
@@ -21,12 +22,17 @@ SINAIS_API_URL=http://10.0.0.5:8000 npm run dev
 
 `SINAIS_API_URL` é lido quando o servidor monta as rotas: em produção, defina-o **no build** (`npm run build`).
 
-O WebSocket usa `ws(s)://<mesmo host>/api/ws`, também repassado pelo rewrite. Se o proxy à frente não repassar
-upgrades de WebSocket, aponte direto para o backend com `NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000/api/ws`
-(variável pública, lida no build; não é segredo).
+O WebSocket usa `ws(s)://<mesmo host>/api/ws`, também repassado pelo rewrite (o job `e2e-real` do CI prova esse
+caminho). Se o proxy à frente não repassar upgrades de WebSocket, aponte direto para o backend com
+`NEXT_PUBLIC_WS_URL=ws://localhost:8000/api/ws` (variável pública, lida no build; não é segredo). Use **`localhost`**,
+nunca `127.0.0.1`: o cookie de sessão é do host em que você entrou (`localhost`); com outro host o navegador não o
+envia, o backend fecha com `4401` e o frontend fica voltando para o login. Se o frontend não estiver em
+`http://localhost:3000`, inclua a origem dele em `SINAIS_ORIGENS_PERMITIDAS` do `.env` (senão o WebSocket fecha com 4403).
 
-Cookies: o backend define `sinais_sessao` (httpOnly, Secure) e `sinais_csrf`. Navegadores aceitam cookies `Secure`
-em `http://localhost`; use `localhost` (não o IP da máquina) no desenvolvimento.
+Cookies: o backend define `sinais_sessao` (httpOnly, Secure), `sinais_csrf` e `sinais_dispositivo` (Path=/api/auth).
+Chrome, Edge e Firefox aceitam cookies `Secure` em `http://localhost`; o Safari pode recusá-los (o login "funciona" mas a
+sessão não fica). Nesse caso, use
+`SINAIS_COOKIE_SEGURO=false` no `.env` (só no desenvolvimento; a configuração de produção recusa).
 
 ## Scripts
 
@@ -37,7 +43,8 @@ em `http://localhost`; use `localhost` (não o IP da máquina) no desenvolviment
 | `npm run typecheck` | `next typegen` + `tsc --noEmit` |
 | `npm test` | Vitest + Testing Library (jsdom) |
 | `npm run build` / `npm start` | build e servidor de produção |
-| `npm run e2e` | Playwright contra `next start` na porta 3100 (rode `npm run build` antes) |
+| `npm run e2e` | Playwright contra `next start` na porta 3100 com API e WebSocket simulados (rode `npm run build` antes) |
+| `npx playwright test -c playwright.real.config.ts` | Playwright contra o backend **real** (`e2e-real/`; precisa de `SINAIS_E2E_EMAIL`, `SINAIS_E2E_SENHA`, `SINAIS_E2E_TOTP` e de `http://localhost:3100` em `SINAIS_ORIGENS_PERMITIDAS`) |
 
 Os testes ponta a ponta simulam a API (`page.route`) e o WebSocket (`page.routeWebSocket`) em `e2e/mocks.ts`.
 Esses dados são **simulações de teste**, rotulados como tal, e nunca aparecem na aplicação.
@@ -89,7 +96,8 @@ e2e/                       # Playwright
 - **VWAP** é ancorado em 00:00 UTC (21:00 em Brasília) e só fica disponível em tempos intradiários.
 - **Gráfico tick a tick.** O canal `candles:SIMB:tg` manda a barra em formação (`fechado: false`) e o fechamento
   (`fechado: true`). Os ticks vão direto para o lightweight-charts, um quadro por vez (`requestAnimationFrame`), sem
-  passar pelo estado do React; indicadores recalculam só a última barra. O rótulo do último preço mostra a
+  passar pelo estado do React; indicadores recalculam só a última barra. O `fechado: true` oficial chega 1–2 s depois
+  da virada e reconcilia a barra de mesmo `t` (não só a última), recalculando os indicadores dali em diante. O rótulo do último preço mostra a
   contagem até o fechamento do candle.
 - **Indicadores do gráfico** são calculados no navegador a partir dos candles exibidos, só para visualização. A
   análise oficial (`/api/analise`) vem do backend.
