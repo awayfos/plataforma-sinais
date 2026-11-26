@@ -1,0 +1,42 @@
+name: Situações
+
+# Fase 6c: rodadas reais do motor de situações (contagem sem rótulo e avaliação A/B) sobre o
+# histórico oficial da Binance. Um job por ativo (limite de memória do runner). Relatório no log.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "contagem ou avaliacao"
+        default: "avaliacao"
+  # TEMPORÁRIO: roda a partir do ramo da Fase 6c (workflow_dispatch só vale para a main).
+  push:
+    branches: [fase-06c-situacoes]
+    paths: [.github/workflows/situacoes.yml]
+
+jobs:
+  situacoes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        ativo: [BTCUSDT, ETHUSDT]
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - name: Rodada
+        env:
+          # TEMPORÁRIO: modo da rodada disparada pelo push
+          MODO: ${{ inputs.modo || 'contagem' }}
+        run: |
+          mkdir -p relatorio
+          /usr/bin/time -v uv run python -m sinais.situacoes.relatorio --modo "$MODO" \
+            --ativo ${{ matrix.ativo }} --fim 2026-10 --meses 24 --saida relatorio 2>&1 \
+            | tee relatorio/execucao.log
